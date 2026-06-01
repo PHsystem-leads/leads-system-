@@ -591,19 +591,13 @@ app.post('/api/leads/search', async (req, res) => {
   }
 });
 
-// --- CLAUDE AI LEAD QUALIFIER ENDPOINT ---
-app.post('/api/leads/qualify', async (req, res) => {
-  const { leadId } = req.body;
-
-  if (!leadId) {
-    return res.status(400).json({ error: 'ID do lead é obrigatório.' });
-  }
-
+// Helper to qualify a lead by ID using the configured AI key (Claude or OpenRouter)
+async function qualifyLeadById(leadId) {
   const leads = await readLeads();
   const idx = leads.findIndex(l => l.id === leadId);
 
   if (idx === -1) {
-    return res.status(404).json({ error: 'Lead não encontrado na base.' });
+    throw new Error('Lead não encontrado na base.');
   }
 
   const lead = leads[idx];
@@ -730,7 +724,7 @@ Não adicione qualquer texto introdutório ou conclusivo.`;
 
     } catch (e) {
       console.error('[OpenRouter API Error]', e);
-      return res.status(500).json({ error: `Erro na API do OpenRouter: ${e.message}` });
+      throw new Error(`Erro na API do OpenRouter: ${e.message}`);
     }
   } else {
     // --- REAL CLAUDE INTEGRATION ---
@@ -815,45 +809,89 @@ Não adicione qualquer texto introdutório ou conclusivo.`;
 
     } catch (e) {
       console.error('[Claude API Error]', e);
-      return res.status(500).json({ error: `Erro na API do Claude: ${e.message}` });
+      throw new Error(`Erro na API do Claude: ${e.message}`);
     }
   }
 
   // Update in Database or local cache
-  try {
-    if (supabase) {
-      console.log(`[Supabase] Salvando qualificação do lead ${leadId} em nuvem...`);
-      const { data, error } = await supabase
-        .from('leads')
-        .update({
-          score: qualifiedFields.score,
-          claude_analysis: qualifiedFields.claude_analysis,
-          suggested_message: qualifiedFields.suggested_message,
-          status: qualifiedFields.status,
-          updated_at: qualifiedFields.updatedAt
-        })
-        .eq('id', leadId)
-        .select();
+  if (supabase) {
+    console.log(`[Supabase] Salvando qualificação do lead ${leadId} em nuvem...`);
+    const { data, error } = await supabase
+      .from('leads')
+      .update({
+        score: qualifiedFields.score,
+        claude_analysis: qualifiedFields.claude_analysis,
+        suggested_message: qualifiedFields.suggested_message,
+        status: qualifiedFields.status,
+        updated_at: qualifiedFields.updatedAt
+      })
+      .eq('id', leadId)
+      .select();
 
-      if (error) throw error;
-      
-      res.json({
-        ...data[0],
-        updatedAt: data[0].updated_at
-      });
-    } else {
-      leads[idx] = {
-        ...lead,
-        ...qualifiedFields
-      };
-      await writeLocalLeads(leads);
-      res.json(leads[idx]);
-    }
-  } catch (dbErr) {
-    console.error('[Qualify Save Error]', dbErr);
-    res.status(500).json({ error: `Erro ao salvar qualificação no banco: ${dbErr.message}` });
+    if (error) throw error;
+    
+    return {
+      ...data[0],
+      updatedAt: data[0].updated_at
+    };
+  } else {
+    leads[idx] = {
+      ...lead,
+      ...qualifiedFields
+    };
+    await writeLocalLeads(leads);
+    return leads[idx];
+  }
+}
+
+// Qualify lead endpoint
+app.post('/api/leads/qualify', async (req, res) => {
+  const { leadId } = req.body;
+
+  if (!leadId) {
+    return res.status(400).json({ error: 'ID do lead é obrigatório.' });
+  }
+
+  try {
+    const result = await qualifyLeadById(leadId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Qualify Endpoint Error]', error);
+    res.status(500).json({ error: error.message });
   }
 });
+
+// --- AUTOPILOT AI CONFIGS & BACKGROUND TIMER ---
+let autopilotActive = false;
+
+app.get('/api/config/autopilot', (req, res) => {
+  res.json({ active: autopilotActive });
+});
+
+app.post('/api/config/autopilot', (req, res) => {
+  const { active } = req.body;
+  if (typeof active === 'boolean') {
+    autopilotActive = active;
+    console.log(`[Autopilot] Estado alterado para: ${autopilotActive ? 'ATIVO' : 'INATIVO'}`);
+  }
+  res.json({ active: autopilotActive });
+});
+
+// Autopilot Interval Worker (primarily for localhost / persistent servers)
+setInterval(async () => {
+  if (!autopilotActive) return;
+  try {
+    const leads = await readLeads();
+    // Qualify oldest discovered lead
+    const leadToQualify = leads.find(l => l.status === 'Descoberto');
+    if (leadToQualify) {
+      console.log(`[Autopilot Backend] Qualificando automaticamente lead: ${leadToQualify.name}...`);
+      await qualifyLeadById(leadToQualify.id);
+    }
+  } catch (e) {
+    console.error('[Autopilot Backend Error]', e.message);
+  }
+}, 60000);
 
 // --- LOAD CLIENT APPLICATION ---
 app.get('*', (req, res) => {

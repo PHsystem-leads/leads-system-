@@ -216,6 +216,17 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
 .copy-block{position:relative;background:rgba(8,7,26,0.4);border:1px solid var(--border);padding:14px;border-radius:var(--r);font-size:12.8px;line-height:1.55;font-family:'Inter',sans-serif;white-space:pre-wrap;color:var(--text)}
 .copy-btn{position:absolute;top:6px;right:6px;font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-2);background:#0e0d21;color:var(--text);cursor:pointer;transition:background 0.15s}
 .copy-btn:hover{background:var(--purple)}
+
+/* qualifying lead card pulse animation */
+.lead-card.qualifying {
+  border-color: var(--purple) !important;
+  animation: pulse-border 1.5s infinite ease-in-out;
+  background: rgba(91, 46, 136, 0.15) !important;
+}
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(91, 46, 136, 0.4); box-shadow: 0 0 5px rgba(91, 46, 136, 0.2); }
+  50% { border-color: var(--purple); box-shadow: 0 0 15px rgba(91, 46, 136, 0.5); }
+}
 </style>
 </head>
 <body>
@@ -421,8 +432,17 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
         </div>
       </div>
 
-      <h2>Pipeline de Leads Capturados</h2>
-      <div style="margin-bottom:10px; font-size:12.5px; color:var(--text-2)">Gerencie os leads no CRM para mover entre etapas. Clique no card para ver detalhes e qualificação Claude IA.</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:10px">
+        <h2 style="margin-bottom:0">Pipeline de Leads Capturados</h2>
+        <div style="display:flex; align-items:center; gap:8px">
+          <span class="badge bk" id="autopilot-indicator" style="font-size:11px; padding:3px 10px; border-color:var(--border)">
+            <span class="ai-dot" id="autopilot-dot" style="background:var(--red); width:6px; height:6px; display:inline-block; margin-right:5px; border-radius:50%"></span>
+            Autopiloto: Inativo
+          </span>
+          <button class="btn btn-xs" id="btn-toggle-autopilot" onclick="toggleAutopilot()" style="padding:4px 10px; font-weight:600">Ativar Autopiloto</button>
+        </div>
+      </div>
+      <div style="margin-bottom:12px; font-size:12.5px; color:var(--text-2)">Gerencie os leads no CRM para mover entre etapas. Clique no card para ver detalhes e qualificação IA.</div>
       
       <!-- Pipeline Columns -->
       <div class="pipeline">
@@ -859,6 +879,19 @@ const titles = {
 let leadsList = [];
 let selectedLead = null;
 let apiStatus = { apify: false, claude: false };
+let qualifyingLeadId = null;
+let autopilotActive = false;
+let autopilotTimeLeft = 60;
+let autopilotTimerInterval = null;
+
+let activityLogs = [
+  { type: 'ai', text: 'Busca Apify finalizada com sucesso.', time: 'agora' },
+  { type: 'ok', text: 'Dr. Fernando Vet qualificado com score 6/10 via Claude.', time: '10 min atrás' },
+  { type: 'warn', text: 'Lead Clínica Patas & Pelos alterado para "Para Humano" via IA.', time: '25 min atrás' },
+  { type: 'ok', text: 'Creche Recanto do Totó assinou o plano Pet Hub!', time: '1h atrás' },
+  { type: 'amber', text: 'Estrela Pet cadastrado manualmente por humano.', time: '2h atrás' },
+  { type: 'ai', text: 'Apify descobriu 4 novos estabelecimentos em Pinheiros.', time: '3h atrás' }
+];
 
 // --- PAGE ROUTER ---
 function go(id, el) {
@@ -890,10 +923,12 @@ function go(id, el) {
 // --- INITIALIZE & FETCH ---
 window.addEventListener('DOMContentLoaded', async () => {
   await fetchStatus();
+  await fetchAutopilotStatus();
   await loadLeads();
   renderActivityFeed();
   renderDispatchHistory();
   countChars();
+  startAutopilotTimer();
 });
 
 async function fetchStatus() {
@@ -1107,8 +1142,15 @@ function renderPipeline() {
       counts[colName]++;
       
       const card = document.createElement('div');
-      card.className = `lead-card ${lead.status === 'Para humano' ? 'urgent' : ''}`;
-      card.onclick = () => openLeadModal(lead);
+      const isQualifying = lead.id === qualifyingLeadId;
+      card.className = `lead-card ${lead.status === 'Para humano' ? 'urgent' : ''} ${isQualifying ? 'qualifying' : ''}`;
+      card.onclick = () => {
+        if (isQualifying) {
+          alert('Este lead está sendo qualificado automaticamente pelo Autopiloto neste momento. Aguarde a finalização!');
+          return;
+        }
+        openLeadModal(lead);
+      };
 
       // Render dots score
       let dotsHtml = '';
@@ -1223,23 +1265,14 @@ function renderActivityFeed() {
   const feed = document.getElementById('activity-feed');
   if (!feed) return;
 
-  const logs = [
-    { type: 'ai', text: 'Busca Apify finalizada com sucesso.', time: 'agora' },
-    { type: 'ok', text: 'Dr. Fernando Vet qualificado com score 6/10 via Claude.', time: '10 min atrás' },
-    { type: 'warn', text: 'Lead Clínica Patas & Pelos alterado para "Para Humano" via IA.', time: '25 min atrás' },
-    { type: 'ok', text: 'Creche Recanto do Totó assinou o plano Pet Hub!', time: '1h atrás' },
-    { type: 'amber', text: 'Estrela Pet cadastrado manualmente por humano.', time: '2h atrás' },
-    { type: 'ai', text: 'Apify descobriu 4 novos estabelecimentos em Pinheiros.', time: '3h atrás' }
-  ];
-
   feed.innerHTML = '';
-  logs.forEach(log => {
+  activityLogs.forEach(log => {
     const item = document.createElement('div');
     item.className = 'feed-item';
     item.innerHTML = `
       <div class="feed-dot ${log.type}"></div>
       <div>
-        <div class="feed-text">${log.text}</div>
+        <div class="feed-text" style="font-weight:${log.text.startsWith('[Autopiloto]') ? '600' : 'normal'}">${log.text}</div>
         <div class="feed-time">${log.time}</div>
       </div>
     `;
@@ -1766,6 +1799,164 @@ function renderChart() {
       }
     }
   });
+}
+
+// --- AUTOPILOT AI LEAD QUALIFICATION PROCESS & SCHEDULER ---
+
+async function fetchAutopilotStatus() {
+  try {
+    const res = await fetch('/api/config/autopilot');
+    if (res.ok) {
+      const data = await res.json();
+      autopilotActive = data.active;
+      updateAutopilotUI();
+    }
+  } catch (e) {
+    console.error('Erro ao buscar status do autopilot:', e);
+  }
+}
+
+async function toggleAutopilot() {
+  try {
+    const response = await fetch('/api/config/autopilot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !autopilotActive })
+    });
+    if (response.ok) {
+      const data = await response.json();
+      autopilotActive = data.active;
+      
+      if (autopilotActive) {
+        autopilotTimeLeft = 60; // Reset countdown
+        activityLogs.unshift({
+          type: 'ai',
+          text: 'Autopiloto de Qualificação IA ativado.',
+          time: 'agora'
+        });
+      } else {
+        activityLogs.unshift({
+          type: 'ai',
+          text: 'Autopiloto de Qualificação IA desativado.',
+          time: 'agora'
+        });
+      }
+      
+      updateAutopilotUI();
+      renderActivityFeed();
+    }
+  } catch (e) {
+    console.error('Erro ao alternar autopilot:', e);
+  }
+}
+
+function updateAutopilotUI() {
+  const indicator = document.getElementById('autopilot-indicator');
+  const btn = document.getElementById('btn-toggle-autopilot');
+  
+  if (!indicator || !btn) return;
+  
+  if (autopilotActive) {
+    const hasLeads = leadsList.some(l => l.status === 'Descoberto');
+    if (hasLeads) {
+      indicator.className = 'badge bp';
+      indicator.innerHTML = `<span class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A; width:6px; height:6px; display:inline-block; margin-right:5px; border-radius:50%"></span>Autopiloto: ATIVO (IA em ${autopilotTimeLeft}s)`;
+    } else {
+      indicator.className = 'badge bp';
+      indicator.innerHTML = `<span class="ai-dot" style="background:#D97706; box-shadow:0 0 6px #D97706; width:6px; height:6px; display:inline-block; margin-right:5px; border-radius:50%"></span>Autopiloto: Ativo (Fila Vazia)`;
+    }
+    btn.className = 'btn btn-xs btn-dark';
+    btn.textContent = 'Desativar Autopiloto';
+    btn.style.boxShadow = '0 0 10px rgba(91, 46, 136, 0.4)';
+  } else {
+    indicator.className = 'badge bk';
+    indicator.innerHTML = '<span class="ai-dot" style="background:#DC2626; box-shadow:0 0 6px #DC2626; width:6px; height:6px; display:inline-block; margin-right:5px; border-radius:50%"></span>Autopiloto: Inativo';
+    btn.className = 'btn btn-xs';
+    btn.textContent = 'Ativar Autopiloto';
+    btn.style.boxShadow = 'none';
+  }
+}
+
+// Visual Countdown Ticker and Trigger
+function startAutopilotTimer() {
+  if (autopilotTimerInterval) clearInterval(autopilotTimerInterval);
+  
+  autopilotTimerInterval = setInterval(async () => {
+    if (!autopilotActive) return;
+    
+    const hasLeads = leadsList.some(l => l.status === 'Descoberto');
+    if (!hasLeads) {
+      autopilotTimeLeft = 60; // Keep reset when empty
+      updateAutopilotUI();
+      return;
+    }
+    
+    autopilotTimeLeft--;
+    if (autopilotTimeLeft <= 0) {
+      autopilotTimeLeft = 60;
+      updateAutopilotUI();
+      await triggerAutopilotQualification();
+    } else {
+      updateAutopilotUI();
+    }
+  }, 1000);
+}
+
+// Qualify lead via Autopilot loop
+async function triggerAutopilotQualification() {
+  const undiscoveredLead = leadsList.find(l => l.status === 'Descoberto');
+  if (!undiscoveredLead) return;
+
+  console.log('[Autopilot Browser] Iniciando qualificação automática do lead:', undiscoveredLead.name);
+  
+  qualifyingLeadId = undiscoveredLead.id;
+  renderPipeline();
+  
+  activityLogs.unshift({
+    type: 'ai',
+    text: `[Autopiloto] Iniciando qualificação de "${undiscoveredLead.name}"...`,
+    time: 'agora'
+  });
+  renderActivityFeed();
+  
+  try {
+    const response = await fetch('/api/leads/qualify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId: undiscoveredLead.id })
+    });
+    
+    if (response.ok) {
+      await loadLeads(); // Reload leads list and pipeline!
+      
+      activityLogs.unshift({
+        type: 'ok',
+        text: `[Autopiloto] "${undiscoveredLead.name}" qualificado com sucesso!`,
+        time: 'agora'
+      });
+      renderActivityFeed();
+    } else {
+      const err = await response.json();
+      console.error('[Autopilot Error]', err);
+      activityLogs.unshift({
+        type: 'warn',
+        text: `[Autopiloto] Falha ao qualificar "${undiscoveredLead.name}": ${err.error || 'Erro interno'}`,
+        time: 'agora'
+      });
+      renderActivityFeed();
+    }
+  } catch (e) {
+    console.error('[Autopilot Exception]', e);
+    activityLogs.unshift({
+      type: 'warn',
+      text: `[Autopiloto] Erro de conexão ao qualificar "${undiscoveredLead.name}".`,
+      time: 'agora'
+    });
+    renderActivityFeed();
+  } finally {
+    qualifyingLeadId = null;
+    renderPipeline();
+  }
 }
 </script>
 </body>
