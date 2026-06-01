@@ -410,7 +410,7 @@ app.post('/api/leads/search', async (req, res) => {
     let input = {};
 
     if (platform === 'Google Maps') {
-      actorId = 'apify~google-maps-scraper';
+      actorId = 'compass~crawler-google-places';
       const searchQueries = [`${query || 'Pet Shop'} em ${location || 'São Paulo'}`];
       input = {
         searchQueries,
