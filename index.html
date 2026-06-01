@@ -879,7 +879,7 @@ const titles = {
 let leadsList = [];
 let selectedLead = null;
 let apiStatus = { apify: false, claude: false };
-let qualifyingLeadId = null;
+let qualifyingLeadIds = new Set();
 let autopilotActive = false;
 let autopilotTimeLeft = 60;
 let autopilotTimerInterval = null;
@@ -1142,7 +1142,7 @@ function renderPipeline() {
       counts[colName]++;
       
       const card = document.createElement('div');
-      const isQualifying = lead.id === qualifyingLeadId;
+      const isQualifying = qualifyingLeadIds.has(lead.id);
       card.className = `lead-card ${lead.status === 'Para humano' ? 'urgent' : ''} ${isQualifying ? 'qualifying' : ''}`;
       card.onclick = () => {
         if (isQualifying) {
@@ -1875,6 +1875,26 @@ function updateAutopilotUI() {
     btn.textContent = 'Ativar Autopiloto';
     btn.style.boxShadow = 'none';
   }
+  
+  // Update pipeline stage label
+  if (autopilotActive) {
+    const descobertos = leadsList.filter(l => l.status === 'Descoberto').length;
+    const qualificados = leadsList.filter(l => l.status === 'Qualificado').length;
+    const abordados = leadsList.filter(l => l.status === 'Abordado').length;
+    const humanos = leadsList.filter(l => l.status === 'Para humano').length;
+    
+    let stageLabel = '';
+    if (humanos > 0) stageLabel += ` • 👤 ${humanos} p/ humano`;
+    
+    const hasPending = descobertos > 0 || qualificados > 0 || abordados > 0;
+    if (hasPending && indicator) {
+      indicator.className = 'badge bp';
+      indicator.innerHTML = `<span class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A; width:6px; height:6px; display:inline-block; margin-right:5px; border-radius:50%"></span>Pipeline: RODANDO (${autopilotTimeLeft}s)${stageLabel}`;
+    } else if (!hasPending && indicator) {
+      indicator.className = 'badge bp';
+      indicator.innerHTML = `<span class="ai-dot" style="background:#D97706; box-shadow:0 0 6px #D97706; width:6px; height:6px; display:inline-block; margin-right:5px; border-radius:50%"></span>Pipeline: Fila Limpa ✓${stageLabel}`;
+    }
+  }
 }
 
 // Visual Countdown Ticker and Trigger
@@ -1884,9 +1904,11 @@ function startAutopilotTimer() {
   autopilotTimerInterval = setInterval(async () => {
     if (!autopilotActive) return;
     
-    const hasLeads = leadsList.some(l => l.status === 'Descoberto');
-    if (!hasLeads) {
-      autopilotTimeLeft = 60; // Keep reset when empty
+    const hasPendingLeads = leadsList.some(l =>
+      l.status === 'Descoberto' || l.status === 'Qualificado' || l.status === 'Abordado'
+    );
+    if (!hasPendingLeads) {
+      autopilotTimeLeft = 60; // Reset when empty
       updateAutopilotUI();
       return;
     }
@@ -1895,68 +1917,119 @@ function startAutopilotTimer() {
     if (autopilotTimeLeft <= 0) {
       autopilotTimeLeft = 60;
       updateAutopilotUI();
-      await triggerAutopilotQualification();
+      await triggerFullPipeline();
     } else {
       updateAutopilotUI();
     }
   }, 1000);
 }
 
-// Qualify lead via Autopilot loop
-async function triggerAutopilotQualification() {
-  const undiscoveredLead = leadsList.find(l => l.status === 'Descoberto');
-  if (!undiscoveredLead) return;
-
-  console.log('[Autopilot Browser] Iniciando qualificação automática do lead:', undiscoveredLead.name);
-  
-  qualifyingLeadId = undiscoveredLead.id;
-  renderPipeline();
-  
-  activityLogs.unshift({
-    type: 'ai',
-    text: `[Autopiloto] Iniciando qualificação de "${undiscoveredLead.name}"...`,
-    time: 'agora'
-  });
-  renderActivityFeed();
-  
-  try {
-    const response = await fetch('/api/leads/qualify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ leadId: undiscoveredLead.id })
-    });
-    
-    if (response.ok) {
-      await loadLeads(); // Reload leads list and pipeline!
-      
-      activityLogs.unshift({
-        type: 'ok',
-        text: `[Autopiloto] "${undiscoveredLead.name}" qualificado com sucesso!`,
-        time: 'agora'
-      });
-      renderActivityFeed();
-    } else {
-      const err = await response.json();
-      console.error('[Autopilot Error]', err);
-      activityLogs.unshift({
-        type: 'warn',
-        text: `[Autopiloto] Falha ao qualificar "${undiscoveredLead.name}": ${err.error || 'Erro interno'}`,
-        time: 'agora'
-      });
-      renderActivityFeed();
-    }
-  } catch (e) {
-    console.error('[Autopilot Exception]', e);
-    activityLogs.unshift({
-      type: 'warn',
-      text: `[Autopiloto] Erro de conexão ao qualificar "${undiscoveredLead.name}".`,
-      time: 'agora'
-    });
+// ─── FULL PIPELINE RUNNER (Browser-side, parallel per stage) ───────────────
+async function triggerFullPipeline() {
+  // STAGE 1: Qualify all "Descoberto" leads
+  const toQualify = leadsList.filter(l => l.status === 'Descoberto').slice(0, 20);
+  if (toQualify.length > 0) {
+    activityLogs.unshift({ type: 'ai', text: `▶ Pipeline STAGE 1: Qualificando ${toQualify.length} lead(s) com IA...`, time: 'agora' });
     renderActivityFeed();
-  } finally {
-    qualifyingLeadId = null;
+    toQualify.forEach(l => qualifyingLeadIds.add(l.id));
     renderPipeline();
+
+    await Promise.all(toQualify.map(async (lead) => {
+      try {
+        const res = await fetch('/api/leads/qualify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId: lead.id })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          const idx = leadsList.findIndex(l => l.id === lead.id);
+          if (idx !== -1) leadsList[idx] = updated;
+          activityLogs.unshift({ type: 'ok', text: `✓ Qualificado: "${lead.name}" (score ${updated.score}/10)`, time: 'agora' });
+        }
+      } catch(e) {
+        activityLogs.unshift({ type: 'warn', text: `⚠ Falha ao qualificar "${lead.name}"`, time: 'agora' });
+      } finally {
+        qualifyingLeadIds.delete(lead.id);
+      }
+      renderPipeline();
+      renderActivityFeed();
+    }));
+
+    updateDashboardStats();
+    renderCRMTable();
   }
+
+  // STAGE 2: Approach all "Qualificado" leads
+  const toApproach = leadsList.filter(l => l.status === 'Qualificado').slice(0, 20);
+  if (toApproach.length > 0) {
+    activityLogs.unshift({ type: 'ai', text: `▶ Pipeline STAGE 2: Abordando ${toApproach.length} lead(s) automaticamente...`, time: 'agora' });
+    renderActivityFeed();
+
+    await Promise.all(toApproach.map(async (lead) => {
+      try {
+        const res = await fetch('/api/leads/approach', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId: lead.id })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          const idx = leadsList.findIndex(l => l.id === lead.id);
+          if (idx !== -1) leadsList[idx] = updated;
+          activityLogs.unshift({ type: 'ok', text: `📩 Abordado: "${lead.name}" (mensagem registrada)`, time: 'agora' });
+        }
+      } catch(e) {
+        activityLogs.unshift({ type: 'warn', text: `⚠ Falha ao abordar "${lead.name}"`, time: 'agora' });
+      }
+      renderPipeline();
+      renderActivityFeed();
+    }));
+
+    updateDashboardStats();
+    renderCRMTable();
+  }
+
+  // STAGE 3: Move "Abordado" leads to "Para humano"
+  const toHuman = leadsList.filter(l => l.status === 'Abordado').slice(0, 20);
+  if (toHuman.length > 0) {
+    activityLogs.unshift({ type: 'amber', text: `▶ Pipeline STAGE 3: Movendo ${toHuman.length} lead(s) para "Para humano"...`, time: 'agora' });
+    renderActivityFeed();
+
+    await Promise.all(toHuman.map(async (lead) => {
+      try {
+        const res = await fetch('/api/leads/approach', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId: lead.id })
+        });
+        // Use PUT to set status directly
+        const res2 = await fetch(`/api/leads/${lead.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'Para humano' })
+        });
+        if (res2.ok) {
+          const updated = await res2.json();
+          const idx = leadsList.findIndex(l => l.id === lead.id);
+          if (idx !== -1) leadsList[idx] = updated;
+          activityLogs.unshift({ type: 'warn', text: `👤 PARA HUMANO: "${lead.name}" — pronto para fechar contrato!`, time: 'agora' });
+        }
+      } catch(e) {
+        activityLogs.unshift({ type: 'warn', text: `⚠ Falha em "${lead.name}"`, time: 'agora' });
+      }
+      renderPipeline();
+      renderActivityFeed();
+    }));
+
+    updateDashboardStats();
+    renderCRMTable();
+  }
+
+  // Final DB sync
+  await loadLeads();
+  updateAutopilotUI();
+}
+
+// Legacy compat (kept for any existing references)
+async function triggerAutopilotQualification() {
+  return triggerFullPipeline();
 }
 </script>
 </body>

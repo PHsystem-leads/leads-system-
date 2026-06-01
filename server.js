@@ -861,6 +861,81 @@ app.post('/api/leads/qualify', async (req, res) => {
   }
 });
 
+// --- APPROACH LEAD HELPER ---
+// Marks a Qualificado lead as Abordado and logs the outreach attempt
+async function approachLeadById(leadId) {
+  const leads = await readLeads();
+  const idx = leads.findIndex(l => l.id === leadId);
+  if (idx === -1) throw new Error('Lead não encontrado.');
+
+  const lead = leads[idx];
+  if (lead.status !== 'Qualificado') throw new Error('Lead não está na etapa Qualificado.');
+
+  const timestamp = new Date().toISOString();
+  const updatedFields = {
+    status: 'Abordado',
+    updated_at: timestamp,
+    updatedAt: timestamp
+  };
+
+  console.log(`[Autopilot] Marcando lead "${lead.name}" como Abordado (abordagem registrada automaticamente).`);
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('leads')
+      .update({ status: 'Abordado', updated_at: timestamp })
+      .eq('id', leadId)
+      .select();
+    if (error) throw error;
+    return { ...data[0], updatedAt: data[0].updated_at };
+  } else {
+    leads[idx] = { ...lead, ...updatedFields };
+    await writeLocalLeads(leads);
+    return leads[idx];
+  }
+}
+
+// Approach lead endpoint
+app.post('/api/leads/approach', async (req, res) => {
+  const { leadId } = req.body;
+  if (!leadId) return res.status(400).json({ error: 'ID do lead é obrigatório.' });
+  try {
+    const result = await approachLeadById(leadId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Approach Endpoint Error]', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- MOVE TO HUMAN HELPER ---
+// Moves Abordado leads to "Para humano" so a real person can close the deal
+async function moveToHumanById(leadId) {
+  const leads = await readLeads();
+  const idx = leads.findIndex(l => l.id === leadId);
+  if (idx === -1) throw new Error('Lead não encontrado.');
+
+  const lead = leads[idx];
+  if (lead.status !== 'Abordado') throw new Error('Lead não está na etapa Abordado.');
+
+  const timestamp = new Date().toISOString();
+  console.log(`[Autopilot] Movendo lead "${lead.name}" para "Para humano" — pronto para fechamento!`);
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('leads')
+      .update({ status: 'Para humano', updated_at: timestamp })
+      .eq('id', leadId)
+      .select();
+    if (error) throw error;
+    return { ...data[0], updatedAt: data[0].updated_at };
+  } else {
+    leads[idx] = { ...lead, status: 'Para humano', updated_at: timestamp, updatedAt: timestamp };
+    await writeLocalLeads(leads);
+    return leads[idx];
+  }
+}
+
 // --- AUTOPILOT AI CONFIGS & BACKGROUND TIMER ---
 let autopilotActive = false;
 
@@ -877,17 +952,45 @@ app.post('/api/config/autopilot', (req, res) => {
   res.json({ active: autopilotActive });
 });
 
-// Autopilot Interval Worker (primarily for localhost / persistent servers)
+// Autopilot Interval Worker — Full pipeline: Descoberto → Qualificado → Abordado → Para humano
 setInterval(async () => {
   if (!autopilotActive) return;
   try {
     const leads = await readLeads();
-    // Qualify oldest discovered lead
-    const leadToQualify = leads.find(l => l.status === 'Descoberto');
-    if (leadToQualify) {
-      console.log(`[Autopilot Backend] Qualificando automaticamente lead: ${leadToQualify.name}...`);
-      await qualifyLeadById(leadToQualify.id);
+
+    // STAGE 1: Qualify up to 20 Descoberto leads in parallel
+    const toQualify = leads.filter(l => l.status === 'Descoberto').slice(0, 20);
+    if (toQualify.length > 0) {
+      console.log(`[Autopilot] STAGE 1 — Qualificando ${toQualify.length} leads...`);
+      await Promise.all(toQualify.map(l => qualifyLeadById(l.id).catch(err =>
+        console.error(`[Autopilot] Falha qualificação ${l.name}:`, err.message)
+      )));
     }
+
+    // Reload leads after stage 1 mutations
+    const leads2 = await readLeads();
+
+    // STAGE 2: Approach up to 20 Qualificado leads in parallel
+    const toApproach = leads2.filter(l => l.status === 'Qualificado').slice(0, 20);
+    if (toApproach.length > 0) {
+      console.log(`[Autopilot] STAGE 2 — Abordando ${toApproach.length} leads...`);
+      await Promise.all(toApproach.map(l => approachLeadById(l.id).catch(err =>
+        console.error(`[Autopilot] Falha abordagem ${l.name}:`, err.message)
+      )));
+    }
+
+    // Reload leads after stage 2 mutations
+    const leads3 = await readLeads();
+
+    // STAGE 3: Move up to 20 Abordado leads to "Para humano" (human closes the deal)
+    const toHuman = leads3.filter(l => l.status === 'Abordado').slice(0, 20);
+    if (toHuman.length > 0) {
+      console.log(`[Autopilot] STAGE 3 — Movendo ${toHuman.length} leads para "Para humano"...`);
+      await Promise.all(toHuman.map(l => moveToHumanById(l.id).catch(err =>
+        console.error(`[Autopilot] Falha mover para humano ${l.name}:`, err.message)
+      )));
+    }
+
   } catch (e) {
     console.error('[Autopilot Backend Error]', e.message);
   }
