@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pet Hub — Captação de Leads IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --black:#08071a;
+  --black-2:#0e0d21;
+  --black-3:#12112d;
+  --bg:#08071a;
+  --bg-card:rgba(18, 17, 45, 0.65);
+  --bg-inset:rgba(14, 13, 33, 0.9);
+  --border:rgba(255, 255, 255, 0.08);
+  --border-2:rgba(91, 46, 136, 0.4);
+  --text:#FDFCF9;
+  --text-2:#B3AFC6;
+  --text-3:#75718E;
+  
+  /* Pet Hub Brand Purple */
+  --purple:#5B2E88;
+  --purple-hover:#6A3B99;
+  --purple-bg:rgba(91, 46, 136, 0.2);
+  --purple-border:rgba(91, 46, 136, 0.5);
+  
+  /* Brand Feedback Colors */
+  --green:#16A34A;--green-bg:rgba(22, 163, 74, 0.15);--green-border:rgba(22, 163, 74, 0.4);
+  --amber:#D97706;--amber-bg:rgba(217, 119, 6, 0.15);--amber-border:rgba(217, 119, 6, 0.4);
+  --red:#DC2626;--red-bg:rgba(220, 38, 38, 0.15);--red-border:rgba(220, 38, 38, 0.4);
+  --blue:#2563EB;--blue-bg:rgba(37, 99, 235, 0.15);--blue-border:rgba(37, 99, 235, 0.4);
+  --r:8px;--rlg:12px;
+}
+
+body{font-family:'Inter',sans-serif;background:radial-gradient(circle at 50% 50%, #0e0d21 0%, #08071a 100%);color:var(--text);display:flex;min-height:100vh;font-size:14px;line-height:1.55}
+
+/* ── SIDEBAR ── */
+aside{width:220px;min-width:220px;background:#08071a;border-right:1px solid var(--border);min-height:100vh;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo-wrap{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.logo-fallback{font-family:'Outfit',sans-serif;font-size:19px;font-weight:700;color:#FDFCF9;letter-spacing:-0.02em}
+.logo-fallback span{color:#C29C38;font-weight:500}
+.logo-sub{font-size:9.5px;color:rgba(255,255,255,0.25);letter-spacing:.08em;margin-top:4px;font-weight:600}
+nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:1px}
+.nav-group{font-size:9px;letter-spacing:.09em;color:rgba(255,255,255,0.2);padding:12px 10px 4px;margin-top:2px;font-weight:600}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:6px;cursor:pointer;color:rgba(255,255,255,.55);font-size:13.5px;font-weight:500;transition:background .15s,color .15s,box-shadow .15s;user-select:none;position:relative}
+.nav-item:hover{background:rgba(255,255,255,.04);color:rgba(255,255,255,.85)}
+.nav-item.active{background:var(--purple);color:#FDFCF9;font-weight:600;box-shadow:0 0 10px rgba(91, 46, 136, 0.4)}
+.nav-item svg{width:15px;height:15px;flex-shrink:0;stroke-width:1.75}
+.nav-badge{margin-left:auto;background:rgba(220,38,38,.8);color:#FADDDD;font-size:10.5px;padding:1px 6px;border-radius:99px;font-weight:500}
+.nav-badge.amber{background:rgba(217,119,6,.7);color:#F5EDD3}
+.nav-badge.green{background:rgba(22,163,74,.8);color:#EAF2EA}
+.nav-bottom{padding:8px 8px 18px;border-top:1px solid rgba(255,255,255,.05);display:flex;flex-direction:column;gap:1px}
+.ai-pulse{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:11.5px;color:rgba(255,255,255,.3)}
+.ai-dot{width:6px;height:6px;border-radius:50%;background:#16A34A;flex-shrink:0;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── HEADER ── */
+header{background:rgba(14, 13, 33, 0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 26px;height:55px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.header-title{font-family:'Outfit',sans-serif;font-size:16px;font-weight:600;letter-spacing:-.015em}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.header-ai{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.header-divider{width:1px;height:18px;background:var(--border)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--purple);color:#FDFCF9;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;font-family:'Outfit',sans-serif;box-shadow:0 0 8px rgba(91, 46, 136, 0.4)}
+
+/* ── MAIN ── */
+main{flex:1;min-width:0;display:flex;flex-direction:column}
+.content{padding:24px 26px;flex:1}
+.section{display:none}.section.active{display:block}
+
+/* ── TYPE ── */
+h1{font-family:'Outfit',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em;margin-bottom:18px}
+h2{font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;letter-spacing:-.01em;margin-bottom:10px;color:var(--text)}
+.page-lead{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.page-lead h1{margin:0 0 3px}
+.page-desc{font-size:12.5px;color:var(--text-2)}
+
+/* ── CARDS ── */
+.card{background:var(--bg-card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--rlg);padding:18px 20px;box-shadow:0 4px 20px rgba(0,0,0,0.25)}
+.card-0{background:var(--bg-card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--rlg);box-shadow:0 4px 20px rgba(0,0,0,0.25)}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:3.5px;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600;white-space:nowrap}
+.bg{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.ba{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.br{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.bb{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+.bk{background:rgba(255,255,255,0.06);color:var(--text-2);border:1px solid var(--border)}
+.bp{background:var(--purple-bg);color:#C8A4F4;border:1px solid var(--purple-border)}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border-2);background:rgba(255, 255, 255, 0.02);color:var(--text);font-family:'Inter',sans-serif;transition:all 0.15s ease;line-height:1;user-select:none}
+.btn:hover{background:var(--purple-bg);border-color:var(--purple);box-shadow:0 0 10px rgba(91, 46, 136, 0.3)}
+.btn-dark{background:var(--purple);color:#FDFCF9;border-color:var(--purple);box-shadow:0 0 12px rgba(91, 46, 136, 0.4)}
+.btn-dark:hover{background:var(--purple-hover);border-color:var(--purple-hover);box-shadow:0 0 18px rgba(91, 46, 136, 0.6)}
+.btn-xs{font-size:12px;padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--text);cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;transition:all 0.15s ease;user-select:none}
+.btn-xs:hover{background:var(--purple-bg);border-color:var(--purple)}
+
+/* ── STATS STRIP ── */
+.stats-strip{display:flex;background:var(--bg-card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.25)}
+.stat{flex:1;padding:14px 16px;border-right:1px solid var(--border)}
+.stat:last-child{border-right:none}
+.stat-l{font-size:10.5px;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
+.stat-v{font-family:'DM Mono',monospace;font-size:18px;font-weight:400;letter-spacing:-.02em}
+.stat-d{font-size:11px;margin-top:3px}
+.stat-d.up{color:var(--green)}.stat-d.dn{color:var(--red)}.stat-d.muted{color:var(--text-3)}
+
+/* ── ROW / COL ── */
+.row{display:flex;gap:16px}
+.col{flex:1;min-width:0}
+
+/* ── FEED ── */
+.feed{padding:0 18px;max-height:300px;overflow-y:auto}
+.feed-item{display:flex;gap:11px;padding:11px 0}
+.feed-item+.feed-item{border-top:1px solid var(--border)}
+.feed-dot{width:7px;height:7px;border-radius:50%;background:var(--text-3);margin-top:4px;flex-shrink:0}
+.feed-dot.ai{background:var(--purple);box-shadow:0 0 6px var(--purple)}.feed-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}.feed-dot.warn{background:var(--red);box-shadow:0 0 6px var(--red)}.feed-dot.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.feed-text{font-size:13px}
+.feed-time{font-size:11px;color:var(--text-3);margin-top:2px}
+
+/* ── ATTENTION LIST ── */
+.attn-item{display:flex;align-items:flex-start;gap:12px;padding:13px 0}
+.attn-item+.attn-item{border-top:1px solid var(--border)}
+.attn-icon{width:30px;height:30px;border-radius:var(--r);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.attn-icon svg{width:14px;height:14px}
+.icon-r{background:var(--red-bg);color:var(--red)}
+.icon-a{background:var(--amber-bg);color:var(--amber)}
+.icon-b{background:var(--blue-bg);color:var(--blue)}
+.icon-p{background:var(--purple-bg);color:#C8A4F4}
+.icon-g{background:var(--green-bg);color:var(--green)}
+.attn-label{font-size:13px;font-weight:500}
+.attn-sub{font-size:12px;color:var(--text-2);margin-top:2px;line-height:1.45}
+.attn-action{margin-left:auto;flex-shrink:0;padding-top:1px}
+
+/* ── PIPELINE ── */
+.pipeline{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}
+.pcol{min-width:215px;width:215px;flex-shrink:0;background:rgba(18, 17, 45, 0.4);border-radius:var(--rlg);padding:10px;border:1px solid var(--border)}
+.pcol-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px}
+.pcol-head h3{font-family:'Outfit',sans-serif;font-size:11.5px;color:var(--text);font-weight:600;margin:0;letter-spacing:.02em;text-transform:uppercase}
+.pcol-cnt{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--text-2);font-weight:600}
+.lead-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:11px 12px;margin-bottom:7px;cursor:pointer;transition:all 0.18s ease;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.lead-card:hover{border-color:var(--purple);transform:translateY(-2px);box-shadow:0 4px 15px rgba(91, 46, 136, 0.25)}
+.lead-card.urgent{border-color:var(--red-border);background:rgba(220, 38, 38, 0.05)}
+.lead-handle{font-weight:600;font-size:13px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead-meta{font-size:11px;color:var(--text-2);margin-bottom:2px}
+.lead-preview{font-size:10.5px;color:var(--text-3);font-style:italic;margin-top:6px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score-row{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:11px;color:var(--text-3)}
+.dots{display:flex;gap:2px}
+.d{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.1)}
+.d.on{background:var(--purple);box-shadow:0 0 4px var(--purple)}
+.d.green-on{background:var(--green);box-shadow:0 0 4px var(--green)}
+
+/* ── TABLE ── */
+table{width:100%;border-collapse:collapse}
+th{font-family:'Outfit',sans-serif;font-size:10.5px;font-weight:600;color:var(--text-2);text-align:left;padding:12px 14px;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+td{padding:12px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--text)}
+tr:hover td{background:rgba(255,255,255,.01)}
+.cname{font-weight:600;font-size:13.5px}
+.chandle{font-size:11.5px;color:var(--text-2);margin-top:2px}
+
+/* ── PROGRESS ── */
+.pbar{height:4px;background:rgba(255,255,255,0.1);border-radius:99px;overflow:hidden}
+.pfill{height:100%;border-radius:99px;background:var(--purple);box-shadow:0 0 6px var(--purple);transition:width .4s}
+.pfill.low{background:var(--amber);box-shadow:0 0 6px var(--amber)}.pfill.crit{background:var(--red);box-shadow:0 0 6px var(--red)}
+
+/* ── COMPOSE ── */
+.compose{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:22px;box-shadow:0 4px 20px rgba(0,0,0,0.25)}
+.form-group{margin-bottom:14px}
+label{font-size:12px;color:var(--text-2);display:block;margin-bottom:5px;font-weight:500}
+input[type="text"],input[type="number"],textarea,select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13.5px;font-family:'Inter',sans-serif;background:rgba(8, 7, 26, 0.4);color:var(--text);outline:none;transition:border-color .12s}
+input:focus,textarea:focus,select:focus{border-color:var(--purple);box-shadow:0 0 8px rgba(91, 46, 136, 0.2)}
+textarea{resize:vertical;min-height:82px;line-height:1.5}
+.char-count{font-size:11px;color:var(--text-3);text-align:right;margin-top:4px}
+
+/* ── INFO BOX ── */
+.info-box{background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:var(--r);padding:12px 14px;font-size:12.5px;color:#C8A4F4;margin-bottom:18px;line-height:1.5;box-shadow:0 0 8px rgba(91, 46, 136, 0.1)}
+
+/* ── CHART ── */
+.chart-wrap{position:relative;height:240px}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(91, 46, 136, 0.4);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:var(--purple)}
+
+/* ── SEARCH CONTAINER ── */
+.search-container{background:var(--bg-card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--rlg);padding:20px;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.25)}
+.search-grid{display:grid;grid-template-columns:1fr 1fr 1fr 120px;gap:12px;align-items:end}
+@media (max-width: 768px) {
+  .search-grid { grid-template-columns: 1fr; }
+}
+
+/* ── DRAWER / MODAL OVERLAY ── */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(8,7,26,0.6);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:flex-end;z-index:999}
+.modal-overlay.active{display:flex}
+.modal-drawer{width:480px;height:100vh;background:#0e0d21;border-left:1px solid var(--border-2);padding:30px 24px;overflow-y:auto;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0, 0, 0, 0.5);animation:slideIn .25s ease-out}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;border-bottom:1px solid var(--border);padding-bottom:15px}
+.modal-title{font-family:'Outfit',sans-serif;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.modal-subtitle{font-size:12.5px;color:var(--text-3);margin-top:2px}
+.modal-close{background:transparent;border:none;font-size:22px;cursor:pointer;color:var(--text-3);transition:color .12s}
+.modal-close:hover{color:var(--text)}
+.modal-body{flex:1;display:flex;flex-direction:column;gap:18px}
+.modal-section-title{font-family:'Outfit',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);font-weight:600;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:2px}
+.meta-value-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;background:rgba(8,7,26,0.5);border:1px solid var(--border);padding:12px 14px;border-radius:var(--r);font-size:13px}
+.meta-lbl{color:var(--text-2)}
+.meta-val{font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prompt-area{font-family:'DM Mono',monospace;font-size:12px;background:#08071a;border:1px solid var(--border);color:#FDFCF9;padding:12px;border-radius:var(--r);white-space:pre-wrap;line-height:1.45;max-height:220px;overflow-y:auto}
+.ai-block{border:1px solid var(--purple-border);background:var(--purple-bg);padding:14px;border-radius:var(--r);color:#C8A4F4;font-size:12.8px;line-height:1.5;box-shadow:0 0 10px rgba(91, 46, 136, 0.15)}
+.ai-block.not-qualified{border-color:var(--border);background:rgba(8,7,26,0.3);color:var(--text-2);text-align:center;padding:24px 14px;box-shadow:none}
+.copy-block{position:relative;background:rgba(8,7,26,0.4);border:1px solid var(--border);padding:14px;border-radius:var(--r);font-size:12.8px;line-height:1.55;font-family:'Inter',sans-serif;white-space:pre-wrap;color:var(--text)}
+.copy-btn{position:absolute;top:6px;right:6px;font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-2);background:#0e0d21;color:var(--text);cursor:pointer;transition:background 0.15s}
+.copy-btn:hover{background:var(--purple)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════ -->
+<aside>
+  <div class="logo-wrap">
+    <div class="logo-fallback">Pet Hub <span>Leads</span></div>
+    <div class="logo-sub">CAPTURA IA & CRM PIPELINE</div>
+  </div>
+
+  <nav>
+    <div class="nav-item active" onclick="go('painel',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Painel
+    </div>
+
+    <div class="nav-group">CAPTAÇÃO INTELIGENTE</div>
+
+    <div class="nav-item" onclick="go('captacao',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+      Buscar Leads IA
+      <span class="nav-badge green" id="badge-total-leads">5</span>
+    </div>
+
+    <div class="nav-group">DASHBOARD & VENDAS</div>
+
+    <div class="nav-item" onclick="go('crm',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3"/><path d="M8 11c-1.66 0-3-1.34-3-3s1.34-3 3-3"/><path d="M22 21c0-3.31-2.69-6-6-6"/><path d="M2 21c0-3.31 2.69-6 6-6"/><circle cx="12" cy="8" r="3"/><path d="M6 21c0-3.31 2.69-6 6-6s6 2.69 6 6"/></svg>
+      CRM Pipeline
+    </div>
+
+    <div class="nav-item" onclick="go('meta',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      Performance
+    </div>
+
+    <div class="nav-item" onclick="go('disparos',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      Abordagens
+    </div>
+
+    <div class="nav-group">SISTEMA</div>
+
+    <div class="nav-item" onclick="go('configuracoes',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Configurações IA
+    </div>
+  </nav>
+
+  <div class="nav-bottom">
+    <div class="ai-pulse">
+      <div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>
+      IA de pé · Local database
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════
+     MAIN
+══════════════════════════════════════════════ -->
+<main>
+  <header>
+    <div class="header-title" id="page-title">Painel Geral</div>
+    <div class="header-right">
+      <div class="header-ai" id="header-badge-claude" style="color:var(--text-3)">
+        <div class="ai-dot" id="dot-claude" style="background:var(--red)"></div>
+        Claude: Carregando...
+      </div>
+      <div class="header-divider"></div>
+      <div class="header-ai" id="header-badge-apify" style="color:var(--text-3)">
+        <div class="ai-dot" id="dot-apify" style="background:var(--red)"></div>
+        Apify: Carregando...
+      </div>
+      <div class="header-divider"></div>
+      <div style="font-size:12.5px;color:var(--text-2);font-weight:600">Membro Pet Hub</div>
+      <div class="avatar">PH</div>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- ════════════════════════
+         PAINEL (DASHBOARD)
+    ════════════════════════ -->
+    <section class="section active" id="sec-painel">
+      <div class="stats-strip">
+        <div class="stat">
+          <div class="stat-l">Total de Leads</div>
+          <div class="stat-v" id="stat-total-leads">0</div>
+          <div class="stat-d up" id="stat-maps-count">0 do Google Maps</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Qualificados por IA</div>
+          <div class="stat-v" id="stat-qualified-leads">0</div>
+          <div class="stat-d up" id="stat-insta-count">0 do Instagram</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Ação Necessária (Humano)</div>
+          <div class="stat-v" id="stat-human-leads">0</div>
+          <div class="stat-d dn" style="color:var(--red)">Aguardando abordagem</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Leads Convertidos</div>
+          <div class="stat-v" id="stat-converted-leads">0</div>
+          <div class="stat-d up" style="color:var(--green)">Sucesso de captação</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1.2;min-width:0">
+          <h2>Prioridades de Abordagem</h2>
+          <div class="card-0" style="padding:0 18px" id="attention-list">
+            <!-- Dynamic Priority Leads -->
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0">
+          <h2>Atividade Recente da IA</h2>
+          <div class="card-0 feed" id="activity-feed">
+            <!-- Dynamic Feed Logs -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════
+         BUSCAR LEADS (CAPTAÇÃO IA)
+    ════════════════════════ -->
+    <section class="section" id="sec-captacao">
+      <div class="info-box" id="info-connection-status">
+        Carregando informações do sistema de conexões...
+      </div>
+
+      <div class="page-lead">
+        <div>
+          <h1>Buscar Leads IA</h1>
+          <div class="page-desc">Escolha a plataforma pet, digite palavras-chave ou hashtags e capture leads instantaneamente.</div>
+        </div>
+      </div>
+
+      <!-- Search Inputs -->
+      <div class="search-container">
+        <div class="search-grid">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Plataforma de Busca</label>
+            <select id="search-platform" onchange="toggleSearchFields()">
+              <option value="Google Maps">Google Maps (Clínicas, Pet Shops locais)</option>
+              <option value="Instagram">Instagram (Hashtags, Perfis concorrentes)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0" id="group-query">
+            <label id="label-query">Segmento / Palavra-chave</label>
+            <input type="text" id="search-query" placeholder="Ex: Clínica Veterinária, Banho e Tosa, Adestrador">
+          </div>
+
+          <div class="form-group" style="margin-bottom:0" id="group-location">
+            <label>Cidade / Localização</label>
+            <input type="text" id="search-location" placeholder="Ex: São Paulo - SP, Belo Horizonte">
+          </div>
+
+          <div class="form-group" style="margin-bottom:0; display:none" id="group-hashtag">
+            <label>Hashtag Pet</label>
+            <input type="text" id="search-hashtag" placeholder="Ex: #petshop, #banhoetosa, #veterinaria">
+          </div>
+
+          <div class="form-group" style="margin-bottom:0">
+            <label>Max Leads</label>
+            <select id="search-limit">
+              <option value="3">3 leads</option>
+              <option value="5" selected>5 leads</option>
+              <option value="10">10 leads</option>
+              <option value="15">15 leads</option>
+            </select>
+          </div>
+
+          <div>
+            <button class="btn btn-dark" style="width:100%; height:37px; justify-content:center" id="btn-start-search" onclick="runLeadCapture()">
+              Buscar Leads
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scraper Live Log -->
+      <div id="search-loading-container" style="display:none; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--rlg); padding:20px; margin-bottom:20px">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
+          <div class="ai-dot" style="width:12px; height:12px; background:var(--purple); box-shadow:0 0 6px var(--purple)"></div>
+          <strong id="search-loader-title">Buscando leads no Google Maps...</strong>
+        </div>
+        <div class="pbar" style="height:6px; margin-bottom:15px"><div class="pfill" id="search-progress" style="width:15%"></div></div>
+        <div class="prompt-area" id="search-console-log">
+[INFO] Iniciando sistema de raspagem automática...
+[INFO] Conectando ao Apify Scraper...
+        </div>
+      </div>
+
+      <h2>Pipeline de Leads Capturados</h2>
+      <div style="margin-bottom:10px; font-size:12.5px; color:var(--text-2)">Gerencie os leads no CRM para mover entre etapas. Clique no card para ver detalhes e qualificação Claude IA.</div>
+      
+      <!-- Pipeline Columns -->
+      <div class="pipeline">
+        <div class="pcol">
+          <div class="pcol-head"><h3>Descoberto</h3><span class="pcol-cnt" id="cnt-descoberto">0</span></div>
+          <div id="col-descoberto" style="min-height:200px"></div>
+        </div>
+
+        <div class="pcol">
+          <div class="pcol-head"><h3 style="color:#C8A4F4">Qualificado IA</h3><span class="pcol-cnt" id="cnt-qualificado" style="color:#C8A4F4">0</span></div>
+          <div id="col-qualificado" style="min-height:200px"></div>
+        </div>
+
+        <div class="pcol">
+          <div class="pcol-head"><h3>Abordado</h3><span class="pcol-cnt" id="cnt-abordado">0</span></div>
+          <div id="col-abordado" style="min-height:200px"></div>
+        </div>
+
+        <div class="pcol">
+          <div class="pcol-head"><h3 style="color:var(--red)">Para humano</h3><span class="pcol-cnt" id="cnt-humano" style="color:var(--red)">0</span></div>
+          <div id="col-humano" style="min-height:200px"></div>
+        </div>
+
+        <div class="pcol">
+          <div class="pcol-head"><h3 style="color:var(--green)">Convertido</h3><span class="pcol-cnt" id="cnt-convertido" style="color:var(--green)">0</span></div>
+          <div id="col-convertido" style="min-height:200px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════
+         CRM (LEADS MANAGER)
+    ════════════════════════ -->
+    <section class="section" id="sec-crm">
+      <div class="page-lead">
+        <div>
+          <h1>CRM Pipeline</h1>
+          <div class="page-desc" id="crm-lead-subtitle">Gerencie todos os leads da base local</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-top:2px">
+          <select id="crm-filter-platform" onchange="renderCRMTable()" style="width:140px; height:36px">
+            <option value="all">Todas Fontes</option>
+            <option value="Google Maps">Google Maps</option>
+            <option value="Instagram">Instagram</option>
+          </select>
+          <select id="crm-filter-status" onchange="renderCRMTable()" style="width:140px; height:36px">
+            <option value="all">Todos Status</option>
+            <option value="Descoberto">Descoberto</option>
+            <option value="Qualificado">Qualificado</option>
+            <option value="Abordado">Abordado</option>
+            <option value="Para humano">Para humano</option>
+            <option value="Convertido">Convertido</option>
+          </select>
+          <button class="btn btn-dark" onclick="openManualLeadModal()" style="height:36px">+ Criar Manual</button>
+        </div>
+      </div>
+
+      <div class="card-0" style="padding:0; overflow-x:auto">
+        <table>
+          <thead>
+            <tr style="background:rgba(255,255,255,0.03)">
+              <th style="border-radius:var(--rlg) 0 0 0">Estabelecimento</th>
+              <th>Origem</th>
+              <th>Segmento Pet</th>
+              <th>Qualificação Claude</th>
+              <th>Status</th>
+              <th style="border-radius:0 var(--rlg) 0 0; text-align:right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="crm-table-body">
+            <!-- Dynamic CRM Rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ════════════════════════
+         PERFORMANCE
+    ════════════════════════ -->
+    <section class="section" id="sec-meta">
+      <div class="page-lead">
+        <div>
+          <h1>Performance de Captação</h1>
+          <div class="page-desc">Métricas de rendimento da busca inteligente nos últimos 30 dias</div>
+        </div>
+      </div>
+
+      <div class="stats-strip">
+        <div class="stat">
+          <div class="stat-l">Buscas Efetuadas</div>
+          <div class="stat-v" id="perf-searches">8</div>
+          <div class="stat-d muted">Google Maps / Instagram</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Eficiência da IA</div>
+          <div class="stat-v">94%</div>
+          <div class="stat-d up">Contatos com telefone</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Média de Score</div>
+          <div class="stat-v" id="perf-avg-score">7.8★</div>
+          <div class="stat-d up">Leads Qualificados</div>
+        </div>
+        <div class="stat">
+          <div class="stat-l">Total Convertidos</div>
+          <div class="stat-v" id="perf-conversions">0</div>
+          <div class="stat-d up">Adicionados ao Pet Hub</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1">
+          <h2>Performance por Segmento</h2>
+          <div class="card" style="display:flex; flex-direction:column; gap:12px">
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px"><strong>Clínica Veterinária</strong><span>35%</span></div>
+              <div class="pbar"><div class="pfill" style="width:35%; background:var(--blue); box-shadow:0 0 6px var(--blue)"></div></div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px"><strong>Pet Shop</strong><span>28%</span></div>
+              <div class="pbar"><div class="pfill" style="width:28%; background:var(--green); box-shadow:0 0 6px var(--green)"></div></div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px"><strong>Banho e Tosa</strong><span>22%</span></div>
+              <div class="pbar"><div class="pfill" style="width:22%; background:var(--amber); box-shadow:0 0 6px var(--amber)"></div></div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:4px"><strong>Creche Canina</strong><span>15%</span></div>
+              <div class="pbar"><div class="pfill" style="width:15%; background:var(--purple); box-shadow:0 0 6px var(--purple)"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col" style="flex:1.2">
+          <h2>Novos Leads Capturados por Dia</h2>
+          <div class="card">
+            <div class="chart-wrap">
+              <canvas id="metaChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════
+         ABORDAGENS (DISPAROS)
+    ════════════════════════ -->
+    <section class="section" id="sec-disparos">
+      <div class="page-lead">
+        <div>
+          <h1>Abordagens Personalizadas</h1>
+          <div class="page-desc">Automatize disparos ou copie mensagens geradas pelo Claude para fechar contratos</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1.2;min-width:0">
+          <h2>Simular Envio em Massa</h2>
+          <div class="compose">
+            <div class="form-group">
+              <label>Nome do Disparo / Campanha</label>
+              <input type="text" value="Abordagem Pet Shop de Bairro - Recompra de Ração">
+            </div>
+            <div class="form-group">
+              <label>Público Alvo</label>
+              <select>
+                <option>Apenas Leads com Score 8+ (3)</option>
+                <option>Clínicas Veterinárias (1)</option>
+                <option>Estética / Banho e Tosa (1)</option>
+                <option>Todos os Leads Capturados (5)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Modelo de Mensagem Básica <span style="color:var(--text-3);font-weight:400">— use {estabelecimento} para personalizar</span></label>
+              <textarea id="msg-area" oninput="countChars()">Olá, tudo bem na equipe da {estabelecimento}? Acompanhamos o trabalho fantástico que fazem pelo bem-estar animal! Notamos que vocês oferecem ótimos serviços pet. Criamos uma automação inteligente chamada Pet Hub que ajuda a automatizar a gestão de clientes e agendas, gerando mais retornos e recorrência. Gostariam de receber uma demonstração sem compromisso no WhatsApp?</textarea>
+              <div class="char-count"><span id="char-cnt">318</span> caracteres</div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px">
+              <button class="btn" onclick="alert('Esta ação de simulação foi executada com sucesso. Os templates foram salvos!')">Salvar Modelo</button>
+              <button class="btn btn-dark" onclick="simulateBulkDispatches()">Disparar abordagens »</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0">
+          <h2>Histórico de Contatos</h2>
+          <div class="card-0" style="padding:0 18px" id="dispatch-history-list">
+            <!-- Dynamic History List -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════
+         CONFIGURAÇÕES IA (REPLACES FRACIONAMENTO)
+    ════════════════════════ -->
+    <section class="section" id="sec-configuracoes">
+      <div class="page-lead">
+        <div>
+          <h1>Configurações do Sistema IA</h1>
+          <div class="page-desc">Gerencie a conexão das APIs, visualize chaves configuradas e controle o prompt padrão do Claude.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1">
+          <h2>Status das Conexões</h2>
+          <div class="card" style="display:flex; flex-direction:column; gap:16px; margin-bottom:20px">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <strong>Anthropic Claude API</strong>
+                <div style="font-size:11.5px; color:var(--text-3)">Responsável por qualificar os leads e criar abordagens.</div>
+              </div>
+              <span class="badge br" id="config-status-claude">Desconectado</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <strong>Apify API Scraper</strong>
+                <div style="font-size:11.5px; color:var(--text-3)">Responsável por raspar dados do Maps e Instagram.</div>
+              </div>
+              <span class="badge br" id="config-status-apify">Desconectado</span>
+            </div>
+          </div>
+
+          <h2>Como Configurar suas Credenciais</h2>
+          <div class="card" style="line-height:1.6; font-size:13px">
+            <p style="margin-bottom:10px">O sistema lê as variáveis de ambiente diretamente de um arquivo invisível chamado <strong>.env</strong> localizado na pasta raiz do projeto.</p>
+            <p style="margin-bottom:10px">Para ativar as buscas reais e qualificação automática real por IA:</p>
+            <ol style="margin-left:20px; margin-bottom:12px; display:flex; flex-direction:column; gap:6px">
+              <li>Abra o arquivo <strong style="font-family:monospace">.env</strong> localizado na sua área de trabalho.</li>
+              <li>Insira sua chave obtida no console da Anthropic na variável <strong style="font-family:monospace">CLAUDE_API_KEY</strong>.</li>
+              <li>Insira seu token de API da Apify na variável <strong style="font-family:monospace">APIFY_API_KEY</strong>.</li>
+              <li>Reinicie o servidor local para carregar as novas chaves.</li>
+            </ol>
+            <div class="info-box" style="margin-bottom:0">
+              <strong>Nota:</strong> Enquanto as chaves estiverem vazias, o sistema executará no <strong>Modo Simulação</strong>. Isso permite que você digite qualquer busca e receba leads pet simulados ultra-realistas com notas de qualificação dinâmicas geradas localmente.
+            </div>
+          </div>
+        </div>
+
+        <div class="col" style="flex:1.2">
+          <h2>Prompt de Qualificação Personalizado</h2>
+          <div class="card" style="display:flex; flex-direction:column; gap:12px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Instruções do Sistema Claude (System Prompt)</label>
+              <textarea style="font-family:'DM Mono',monospace; font-size:11.5px; min-height:300px; background:#08071a" id="config-system-prompt" readonly>
+Você é a inteligência artificial da Pet Hub, uma plataforma SaaS de automação de marketing e CRM para empresas pet (clínicas veterinárias, pet shops, banho e tosa, creches, adestradores).
+Seu objetivo é analisar as informações do lead pet e retornar:
+1. Uma qualificação crítica de 0 a 10 de quão atraente este lead é para contratar a Pet Hub.
+2. Uma análise sucinta de dor/oportunidade do negócio em português de até 3 frases.
+3. Um script de mensagem de primeira abordagem (cold approach) no WhatsApp/Instagram em português extremamente personalizada e persuasiva.
+              </textarea>
+              <div style="font-size:11.5px; color:var(--text-3); margin-top:5px">Este prompt garante que a IA analise a biografia, avaliações e dados geográficos do lead pet para criar um texto altamente convincente e customizado.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /content -->
+</main>
+
+<!-- ═══════════════════════════════════════════
+     OVERLAY DRAWER: DETALHES DO LEAD & CLAUDE IA
+══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="lead-details-modal" onclick="closeLeadModal(event)">
+  <div class="modal-drawer" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="m-name">Estabelecimento Pet</div>
+        <div class="modal-subtitle" id="m-platform-label">Origem: Google Maps</div>
+      </div>
+      <button class="modal-close" onclick="closeLeadModal(null)">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Grid Metadata -->
+      <div>
+        <div class="modal-section-title">Dados Gerais Capturados</div>
+        <div class="meta-value-grid">
+          <div class="meta-lbl">Segmento Pet</div>
+          <div class="meta-val" id="m-segment">Pet Shop</div>
+
+          <div class="meta-lbl" id="m-metric-1-lbl">Seguidores</div>
+          <div class="meta-val" id="m-metric-1-val">12,400</div>
+
+          <div class="meta-lbl" id="m-metric-2-lbl">Média Reviews</div>
+          <div class="meta-val" id="m-metric-2-val">4.8★ (45 avaliações)</div>
+
+          <div class="meta-lbl">WhatsApp / Fone</div>
+          <div class="meta-val" id="m-phone">+55 11 99999-9999</div>
+
+          <div class="meta-lbl">E-mail</div>
+          <div class="meta-val" id="m-email">contato@petshop.com.br</div>
+
+          <div class="meta-lbl">Instagram</div>
+          <div class="meta-val" id="m-handle">@petshop_instagram</div>
+        </div>
+      </div>
+
+      <!-- Address / Bio -->
+      <div id="m-address-container">
+        <div class="modal-section-title">Endereço Completo</div>
+        <div style="font-size:12.5px; color:var(--text-2); line-height:1.4" id="m-address">Av. Paulista, 1000 - São Paulo</div>
+      </div>
+
+      <div>
+        <div class="modal-section-title">Biografia / Sobre a Empresa</div>
+        <div style="font-size:12.5px; color:var(--text-2); line-height:1.45; font-style:italic" id="m-bio">"Biografia do perfil pet do Instagram raspada pelo Apify..."</div>
+      </div>
+
+      <!-- Claude API Section -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <div class="modal-section-title" style="margin-bottom:0">Qualificação Claude IA</div>
+          <button class="btn btn-xs btn-dark" id="btn-qualify-ia" onclick="triggerClaudeQualification()">Qualificar com IA</button>
+        </div>
+
+        <div id="claude-result-container">
+          <!-- Dynamically populated or showing "Not Qualified" state -->
+        </div>
+      </div>
+
+      <!-- Change status & Delete -->
+      <div style="margin-top:auto; border-top:1px solid var(--border); padding-top:18px; display:flex; gap:10px">
+        <div style="flex:1">
+          <select id="m-change-status" onchange="changeLeadStatus()" style="height:36px">
+            <option value="Descoberto">Mover para: Descoberto</option>
+            <option value="Qualificado">Mover para: Qualificado</option>
+            <option value="Abordado">Mover para: Abordado</option>
+            <option value="Para humano">Mover para: Para humano</option>
+            <option value="Convertido">Mover para: Convertido</option>
+          </select>
+        </div>
+        <button class="btn" style="border-color:var(--red-border); color:var(--red); background:rgba(220,38,38,0.05)" onclick="deleteActiveLead()">Excluir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     OVERLAY DRAWER: NOVO LEAD MANUAL
+══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="manual-lead-modal" onclick="closeManualLeadModal(event)">
+  <div class="modal-drawer" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Novo Lead CRM</div>
+        <div class="modal-subtitle">Adicione um lead manualmente à base de dados do Pet Hub</div>
+      </div>
+      <button class="modal-close" onclick="closeManualLeadModal(null)">&times;</button>
+    </div>
+
+    <div class="modal-body" style="gap:14px">
+      <div class="form-group">
+        <label>Nome do Estabelecimento *</label>
+        <input type="text" id="manual-name" placeholder="Ex: Clínica Vet Amigo Animal">
+      </div>
+      <div class="form-group">
+        <label>Origem *</label>
+        <select id="manual-platform">
+          <option value="Instagram">Instagram</option>
+          <option value="Google Maps">Google Maps</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Instagram Handle / Localização</label>
+        <input type="text" id="manual-handle" placeholder="Ex: @amigoanimalvet ou Pinheiros, SP">
+      </div>
+      <div class="form-group">
+        <label>Segmento Pet</label>
+        <select id="manual-segment">
+          <option value="Pet Shop">Pet Shop</option>
+          <option value="Clínica Veterinária">Clínica Veterinária</option>
+          <option value="Banho e Tosa">Banho e Tosa</option>
+          <option value="Creche Canina">Creche Canina</option>
+          <option value="Adestrador">Adestrador</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>WhatsApp / Telefone</label>
+        <input type="text" id="manual-phone" placeholder="Ex: +55 11 99999-9999">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="text" id="manual-email" placeholder="Ex: contato@empresa.com.br">
+      </div>
+      <div class="form-group">
+        <label>Biografia / Descrição Comercial</label>
+        <textarea id="manual-bio" placeholder="Descreva brevemente o negócio pet..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Endereço Completo</label>
+        <input type="text" id="manual-address" placeholder="Rua, Número, Bairro, Cidade">
+      </div>
+
+      <div style="margin-top:auto; padding-top:15px; display:flex; gap:10px">
+        <button class="btn" style="flex:1; justify-content:center" onclick="closeManualLeadModal(null)">Cancelar</button>
+        <button class="btn btn-dark" style="flex:1.2; justify-content:center" onclick="submitManualLead()">Criar Lead</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- GLOBAL APPLICATION STATE ---
+const titles = {
+  painel: 'Painel Geral',
+  captacao: 'Buscar Leads IA',
+  crm: 'CRM Pipeline',
+  meta: 'Performance de Captação',
+  disparos: 'Abordagens Personalizadas',
+  configuracoes: 'Configurações do Sistema IA'
+};
+
+let leadsList = [];
+let selectedLead = null;
+let apiStatus = { apify: false, claude: false };
+
+// --- PAGE ROUTER ---
+function go(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  
+  const sec = document.getElementById('sec-' + id);
+  if (sec) sec.classList.add('active');
+  
+  if (el) {
+    el.classList.add('active');
+  } else {
+    document.querySelectorAll('.nav-item').forEach(n => {
+      const clickAttr = n.getAttribute('onclick');
+      if (clickAttr && clickAttr.includes("'" + id + "'")) {
+        n.classList.add('active');
+      }
+    });
+  }
+  
+  document.getElementById('page-title').textContent = titles[id] || id;
+  
+  // Custom section actions
+  if (id === 'meta') {
+    setTimeout(renderChart, 80);
+  }
+}
+
+// --- INITIALIZE & FETCH ---
+window.addEventListener('DOMContentLoaded', async () => {
+  await fetchStatus();
+  await loadLeads();
+  renderActivityFeed();
+  renderDispatchHistory();
+  countChars();
+});
+
+async function fetchStatus() {
+  try {
+    const res = await fetch('/api/status');
+    if (res.ok) {
+      apiStatus = await res.json();
+      updateStatusBadges();
+    }
+  } catch (e) {
+    console.error('Erro ao conectar ao servidor backend:', e);
+    // Display offline alert inside connection status
+    const statusBox = document.getElementById('info-connection-status');
+    if (statusBox) {
+      statusBox.className = 'info-box';
+      statusBox.style.background = 'var(--red-bg)';
+      statusBox.style.color = 'var(--red)';
+      statusBox.style.borderColor = 'var(--red-border)';
+      statusBox.innerHTML = '<strong>Servidor offline:</strong> Não foi possível obter conexão com o backend. Verifique se o comando <code>npm run dev</code> está rodando.';
+    }
+  }
+}
+
+function updateStatusBadges() {
+  const dotClaude = document.getElementById('dot-claude');
+  const badgeClaude = document.getElementById('header-badge-claude');
+  const dotApify = document.getElementById('dot-apify');
+  const badgeApify = document.getElementById('header-badge-apify');
+
+  const configClaude = document.getElementById('config-status-claude');
+  const configApify = document.getElementById('config-status-apify');
+
+  // Claude Status
+  if (apiStatus.claude) {
+    dotClaude.style.background = '#16A34A';
+    badgeClaude.style.color = 'var(--green)';
+    badgeClaude.innerHTML = '<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>Claude: Ativo';
+    if (configClaude) {
+      configClaude.className = 'badge bg';
+      configClaude.textContent = 'Conectado';
+    }
+  } else {
+    dotClaude.style.background = '#DC2626';
+    badgeClaude.style.color = 'var(--red)';
+    badgeClaude.innerHTML = '<div class="ai-dot" style="background:#DC2626; box-shadow:0 0 6px #DC2626"></div>Claude: Simulado';
+    if (configClaude) {
+      configClaude.className = 'badge br';
+      configClaude.textContent = 'Modo Simulação';
+    }
+  }
+
+  // Apify Status
+  if (apiStatus.apify) {
+    dotApify.style.background = '#16A34A';
+    badgeApify.style.color = 'var(--green)';
+    badgeApify.innerHTML = '<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>Apify: Ativo';
+    if (configApify) {
+      configApify.className = 'badge bg';
+      configApify.textContent = 'Conectado';
+    }
+  } else {
+    dotApify.style.background = '#DC2626';
+    badgeApify.style.color = 'var(--red)';
+    badgeApify.innerHTML = '<div class="ai-dot" style="background:#DC2626; box-shadow:0 0 6px #DC2626"></div>Apify: Simulado';
+    if (configApify) {
+      configApify.className = 'badge br';
+      configApify.textContent = 'Modo Simulação';
+    }
+  }
+
+  // Info Box text in Captação IA
+  const infoBox = document.getElementById('info-connection-status');
+  if (infoBox) {
+    if (apiStatus.apify && apiStatus.claude) {
+      infoBox.className = 'info-box';
+      infoBox.style.background = 'var(--purple-bg)';
+      infoBox.style.color = '#C8A4F4';
+      infoBox.style.borderColor = 'var(--purple-border)';
+      infoBox.innerHTML = '<strong>Apify e Claude Ativos!</strong> As buscas rasparão dados reais públicos do Google Maps e Instagram e qualificarão automaticamente com a IA da Anthropic.';
+    } else {
+      infoBox.className = 'info-box';
+      infoBox.style.background = 'var(--amber-bg)';
+      infoBox.style.color = 'var(--amber)';
+      infoBox.style.borderColor = 'var(--amber-border)';
+      infoBox.innerHTML = '<strong>Modo de Simulação Ativo:</strong> Chaves de API ausentes no <code>.env</code>. O sistema gerará leads e qualificações pet dinâmicas simuladas com alto grau de fidelidade para testes.';
+    }
+  }
+}
+
+async function loadLeads() {
+  try {
+    const res = await fetch('/api/leads');
+    if (res.ok) {
+      leadsList = await res.json();
+      updateDashboardStats();
+      renderPipeline();
+      renderCRMTable();
+    }
+  } catch (e) {
+    console.error('Erro ao buscar leads:', e);
+  }
+}
+
+// --- DYNAMIC RENDERING HELPERS ---
+function updateDashboardStats() {
+  const total = leadsList.length;
+  const qualified = leadsList.filter(l => l.status === 'Qualificado').length;
+  const human = leadsList.filter(l => l.status === 'Para humano').length;
+  const converted = leadsList.filter(l => l.status === 'Convertido').length;
+
+  const mapsCount = leadsList.filter(l => l.platform === 'Google Maps').length;
+  const instaCount = leadsList.filter(l => l.platform === 'Instagram').length;
+
+  // Painel Stats
+  document.getElementById('stat-total-leads').textContent = total;
+  document.getElementById('stat-qualified-leads').textContent = qualified;
+  document.getElementById('stat-human-leads').textContent = human;
+  document.getElementById('stat-converted-leads').textContent = converted;
+
+  document.getElementById('stat-maps-count').textContent = `${mapsCount} do Google Maps`;
+  document.getElementById('stat-insta-count').textContent = `${instaCount} do Instagram`;
+
+  // Performance Stats
+  document.getElementById('perf-avg-score').textContent = calculateAverageScore() + '★';
+  document.getElementById('perf-conversions').textContent = converted;
+
+  // Sidebar total badge
+  document.getElementById('badge-total-leads').textContent = total;
+}
+
+function calculateAverageScore() {
+  if (leadsList.length === 0) return '0';
+  const sum = leadsList.reduce((acc, curr) => acc + (curr.score || 0), 0);
+  return (sum / leadsList.length).toFixed(1);
+}
+
+// --- RENDER DYNAMIC PIPELINE ---
+function renderPipeline() {
+  const columns = {
+    Descoberto: document.getElementById('col-descoberto'),
+    Qualificado: document.getElementById('col-qualificado'),
+    Abordado: document.getElementById('col-abordado'),
+    'Para humano': document.getElementById('col-humano'),
+    Convertido: document.getElementById('col-convertido')
+  };
+
+  // Clear all cols
+  Object.keys(columns).forEach(key => {
+    if (columns[key]) columns[key].innerHTML = '';
+  });
+
+  // Counters
+  const counts = { Descoberto: 0, Qualificado: 0, Abordado: 0, 'Para humano': 0, Convertido: 0 };
+
+  leadsList.forEach(lead => {
+    const colName = lead.status || 'Descoberto';
+    const colElement = columns[colName];
+    
+    if (colElement) {
+      counts[colName]++;
+      
+      const card = document.createElement('div');
+      card.className = `lead-card ${lead.status === 'Para humano' ? 'urgent' : ''}`;
+      card.onclick = () => openLeadModal(lead);
+
+      // Render dots score
+      let dotsHtml = '';
+      for (let i = 1; i <= 10; i++) {
+        const dotClass = i <= lead.score ? (lead.status === 'Convertido' ? 'd green-on' : 'd on') : 'd';
+        dotsHtml += `<div class="${dotClass}"></div>`;
+      }
+
+      // Metadata string
+      let metaStr = '';
+      if (lead.platform === 'Google Maps') {
+        metaStr = `${lead.rating || 'N/A'}★ (${lead.reviews || 0} reviews) · ${lead.segment}`;
+      } else {
+        metaStr = `${lead.followers ? (lead.followers / 1000).toFixed(1) + 'k' : 'N/A'} seguidores · ${lead.segment}`;
+      }
+
+      card.innerHTML = `
+        <div class="lead-handle">${lead.name}</div>
+        <div class="lead-meta">${lead.handle}</div>
+        <div class="lead-meta" style="color:var(--text-3)">${metaStr}</div>
+        <div class="lead-preview">"${lead.bio ? lead.bio.slice(0, 50) + '...' : 'Sem biografia disponível.'}"</div>
+        <div class="score-row">Score <div class="dots">${dotsHtml}</div> ${lead.score}/10</div>
+      `;
+
+      colElement.appendChild(card);
+    }
+  });
+
+  // Update counters
+  document.getElementById('cnt-descoberto').textContent = counts.Descoberto;
+  document.getElementById('cnt-qualificado').textContent = counts.Qualificado;
+  document.getElementById('cnt-abordado').textContent = counts.Abordado;
+  document.getElementById('cnt-humano').textContent = counts['Para humano'];
+  document.getElementById('cnt-convertido').textContent = counts.Convertido;
+}
+
+// --- RENDER DYNAMIC CRM TABLE ---
+function renderCRMTable() {
+  const tableBody = document.getElementById('crm-table-body');
+  if (!tableBody) return;
+
+  tableBody.innerHTML = '';
+
+  const filterPlatform = document.getElementById('crm-filter-platform').value;
+  const filterStatus = document.getElementById('crm-filter-status').value;
+
+  const filtered = leadsList.filter(l => {
+    const matchPlat = filterPlatform === 'all' || l.platform === filterPlatform;
+    const matchStat = filterStatus === 'all' || l.status === filterStatus;
+    return matchPlat && matchStat;
+  });
+
+  document.getElementById('crm-lead-subtitle').textContent = `${filtered.length} leads correspondentes na base local`;
+
+  if (filtered.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center; padding:30px; color:var(--text-3)">Nenhum lead pet encontrado com os filtros selecionados.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  filtered.forEach(lead => {
+    const tr = document.createElement('tr');
+
+    // Platform Badge
+    const platformBadge = lead.platform === 'Google Maps' 
+      ? '<span class="badge ba">Google Maps</span>' 
+      : '<span class="badge bb">Instagram</span>';
+
+    // Status Badge
+    let statusClass = 'bk';
+    if (lead.status === 'Qualificado') statusClass = 'bp';
+    else if (lead.status === 'Abordado') statusClass = 'ba';
+    else if (lead.status === 'Para humano') statusClass = 'br';
+    else if (lead.status === 'Convertido') statusClass = 'bg';
+
+    // Render dots rating
+    let scoreStars = '★'.repeat(Math.round(lead.score / 2)) + '☆'.repeat(5 - Math.round(lead.score / 2));
+    if (lead.score >= 8) scoreStars = `<span style="color:var(--amber)">${scoreStars}</span>`;
+
+    tr.innerHTML = `
+      <td>
+        <div class="cname">${lead.name}</div>
+        <div class="chandle">${lead.handle}</div>
+      </td>
+      <td>${platformBadge}</td>
+      <td><strong>${lead.segment}</strong></td>
+      <td>
+        <div style="font-family:'DM Mono',monospace; font-weight:600">${lead.score}/10</div>
+        <div style="font-size:11.5px; color:var(--text-3); margin-top:2px">${scoreStars}</div>
+      </td>
+      <td><span class="badge ${statusClass}">${lead.status}</span></td>
+      <td style="text-align:right">
+        <button class="btn-xs" style="margin-right:4px" onclick="openLeadModalById('${lead.id}')">Ver Detalhes</button>
+        <button class="btn-xs" style="border-color:var(--red-border); color:var(--red)" onclick="deleteLead('${lead.id}')">Excluir</button>
+      </td>
+    `;
+
+    tableBody.appendChild(tr);
+  });
+}
+
+function openLeadModalById(id) {
+  const lead = leadsList.find(l => l.id === id);
+  if (lead) openLeadModal(lead);
+}
+
+// --- RENDER RECENT ATTENTION & LOGS ---
+function renderActivityFeed() {
+  const feed = document.getElementById('activity-feed');
+  if (!feed) return;
+
+  const logs = [
+    { type: 'ai', text: 'Busca Apify finalizada com sucesso.', time: 'agora' },
+    { type: 'ok', text: 'Dr. Fernando Vet qualificado com score 6/10 via Claude.', time: '10 min atrás' },
+    { type: 'warn', text: 'Lead Clínica Patas & Pelos alterado para "Para Humano" via IA.', time: '25 min atrás' },
+    { type: 'ok', text: 'Creche Recanto do Totó assinou o plano Pet Hub!', time: '1h atrás' },
+    { type: 'amber', text: 'Estrela Pet cadastrado manualmente por humano.', time: '2h atrás' },
+    { type: 'ai', text: 'Apify descobriu 4 novos estabelecimentos em Pinheiros.', time: '3h atrás' }
+  ];
+
+  feed.innerHTML = '';
+  logs.forEach(log => {
+    const item = document.createElement('div');
+    item.className = 'feed-item';
+    item.innerHTML = `
+      <div class="feed-dot ${log.type}"></div>
+      <div>
+        <div class="feed-text">${log.text}</div>
+        <div class="feed-time">${log.time}</div>
+      </div>
+    `;
+    feed.appendChild(item);
+  });
+}
+
+function renderDispatchHistory() {
+  const history = document.getElementById('dispatch-history-list');
+  if (!history) return;
+
+  const contacts = [
+    { name: 'Dr. Fernando Felinos', meta: 'WhatsApp enviado hoje', stat: 'Pendente', count: '1' },
+    { name: 'Hotel Cão Feliz (Simulação)', meta: 'WhatsApp enviado ontem', stat: 'Sem resposta', count: '0' },
+    { name: 'Patinhas Felizes Pet (Instagram)', meta: 'Abordagem DM enviada ontem', stat: 'Em conversa', count: '3' },
+    { name: 'Recanto do Totó Daycare', meta: 'Disparo efetuado há 3 dias', stat: 'Fechado', count: '8', active: true }
+  ];
+
+  history.innerHTML = '';
+  contacts.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'hist';
+    item.style.padding = '12px 0';
+    item.style.borderBottom = '1px solid var(--border)';
+
+    const badgeClass = c.active ? 'badge bg' : 'badge bk';
+
+    item.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div class="hist-name" style="font-weight:600">${c.name}</div>
+        <span class="${badgeClass}">${c.stat}</span>
+      </div>
+      <div class="hist-meta" style="font-size:11.5px; color:var(--text-3); margin-top:2px">${c.meta}</div>
+      <div class="hist-stats" style="display:flex;gap:12px;margin-top:5px; font-size:11.5px; color:var(--text-2)">
+        <span>Mensagens trocadas: <strong>${c.count}</strong></span>
+      </div>
+    `;
+    history.appendChild(item);
+  });
+}
+
+// --- SEARCH FIELDS Platform Toggle ---
+function toggleSearchFields() {
+  const platform = document.getElementById('search-platform').value;
+  const groupQuery = document.getElementById('group-query');
+  const groupLocation = document.getElementById('group-location');
+  const groupHashtag = document.getElementById('group-hashtag');
+  const labelQuery = document.getElementById('label-query');
+
+  if (platform === 'Google Maps') {
+    groupQuery.style.display = 'block';
+    groupLocation.style.display = 'block';
+    groupHashtag.style.display = 'none';
+    labelQuery.textContent = 'Segmento / Palavra-chave';
+  } else {
+    groupQuery.style.display = 'none';
+    groupLocation.style.display = 'none';
+    groupHashtag.style.display = 'block';
+  }
+}
+
+// --- CAPTURA IA: RUN SCRAPER PROCESS ---
+async function runLeadCapture() {
+  const platform = document.getElementById('search-platform').value;
+  const query = document.getElementById('search-query').value;
+  const location = document.getElementById('search-location').value;
+  const hashtag = document.getElementById('search-hashtag').value;
+  const limit = parseInt(document.getElementById('search-limit').value);
+
+  // Validate inputs
+  if (platform === 'Google Maps' && !query) {
+    alert('Por favor, informe o segmento/palavra-chave da busca local.');
+    return;
+  }
+  if (platform === 'Instagram' && !hashtag) {
+    alert('Por favor, informe a hashtag do Instagram a ser buscada.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-start-search');
+  const loaderContainer = document.getElementById('search-loading-container');
+  const logConsole = document.getElementById('search-console-log');
+  const progressBar = document.getElementById('search-progress');
+  const loaderTitle = document.getElementById('search-loader-title');
+
+  btn.disabled = true;
+  btn.textContent = 'Capturando...';
+  loaderContainer.style.display = 'block';
+  progressBar.style.width = '10%';
+  loaderTitle.textContent = `Buscando leads no ${platform}...`;
+  
+  logConsole.textContent = `[INFO] Conectando ao Apify Scraper...\n[INFO] Plataforma: ${platform}\n[INFO] Query de busca: ${platform === 'Google Maps' ? query : hashtag}\n[INFO] Iniciando motor de raspagem inteligente... (Aguarde alguns segundos)\n`;
+
+  // Start log intervals to make it look responsive and elegant
+  let progress = 10;
+  const interval = setInterval(() => {
+    if (progress < 90) {
+      progress += Math.floor(Math.random() * 8) + 2;
+      progressBar.style.width = `${progress}%`;
+      
+      const logs = [
+        `[INFO] Analisando registros públicos para a busca informada...`,
+        `[SCRAPER] Capturando dados cadastrais, telefone e e-mails do estabelecimento...`,
+        `[SCRAPER] Coletando seguidores e métricas sociais dos perfis pet relacionados...`,
+        `[SCRAPER] Gravando resultados temporários no buffer local...`,
+        `[INFO] Filtrando registros duplicados para economizar processamento...`
+      ];
+      const randomLog = logs[Math.floor(Math.random() * logs.length)];
+      logConsole.textContent += `${randomLog}\n`;
+      logConsole.scrollTop = logConsole.scrollHeight;
+    }
+  }, 1000);
+
+  try {
+    const response = await fetch('/api/leads/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform, query, location, hashtag, limit })
+    });
+
+    clearInterval(interval);
+    progressBar.style.width = '100%';
+    progressBar.style.background = 'var(--green)';
+
+    if (response.ok) {
+      const data = await response.json();
+      logConsole.textContent += `\n[SUCESSO] ${data.message}\n`;
+      logConsole.textContent += `[DATABASE] Salvando novos leads capturados no leads.json local.\n`;
+      logConsole.textContent += `[CRM] Atualizando pipeline e CRM...\n`;
+      
+      // Reload database
+      await loadLeads();
+    } else {
+      const err = await response.json();
+      logConsole.textContent += `\n[ERRO] Falha na captação: ${err.error || 'Erro interno'}\n`;
+    }
+  } catch (e) {
+    clearInterval(interval);
+    console.error(e);
+    logConsole.textContent += `\n[ERRO] Falha de comunicação com o servidor.\n`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Buscar Leads';
+    logConsole.scrollTop = logConsole.scrollHeight;
+  }
+}
+
+// --- CLAUDE IA: QUALIFICATION PROCESS ---
+async function triggerClaudeQualification() {
+  if (!selectedLead) return;
+
+  const btn = document.getElementById('btn-qualify-ia');
+  const container = document.getElementById('claude-result-container');
+
+  btn.disabled = true;
+  btn.textContent = 'Analisando...';
+  
+  container.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; background:rgba(8,7,26,0.3); border-radius:var(--r); border:1px solid var(--border)">
+      <div class="ai-dot" style="width:12px; height:12px; background:var(--purple); box-shadow:0 0 6px var(--purple); margin-bottom:12px"></div>
+      <div style="font-weight:600; font-size:13px; color:var(--text-2)">Claude IA analisando biografia e avaliações...</div>
+      <div style="font-size:11.5px; color:var(--text-3); margin-top:4px">Isso pode levar de 2 a 5 segundos.</div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch('/api/leads/qualify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId: selectedLead.id })
+    });
+
+    if (response.ok) {
+      const updatedLead = await response.json();
+      
+      // Update selected lead state
+      selectedLead = updatedLead;
+      
+      // Sync local array
+      const idx = leadsList.findIndex(l => l.id === selectedLead.id);
+      if (idx !== -1) leadsList[idx] = selectedLead;
+
+      // Re-render dashboard, table & pipeline
+      updateDashboardStats();
+      renderPipeline();
+      renderCRMTable();
+
+      // Render updated details modal view
+      renderLeadModalClaudeSection();
+      
+      // Update status dropdown
+      document.getElementById('m-change-status').value = selectedLead.status;
+    } else {
+      const err = await response.json();
+      alert(`Falha ao qualificar lead: ${err.error || 'Erro interno'}`);
+      renderLeadModalClaudeSection();
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Erro de rede ao conectar ao Claude.');
+    renderLeadModalClaudeSection();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Re-qualificar';
+  }
+}
+
+// --- DETAILS MODAL OPEN/CLOSE ---
+function openLeadModal(lead) {
+  selectedLead = lead;
+  
+  // Set basic data
+  document.getElementById('m-name').textContent = lead.name;
+  document.getElementById('m-segment').textContent = lead.segment;
+  document.getElementById('m-phone').textContent = lead.phone || 'Não informado';
+  document.getElementById('m-email').textContent = lead.email || 'Não informado';
+  document.getElementById('m-handle').textContent = lead.handle;
+  document.getElementById('m-bio').textContent = lead.bio ? `"${lead.bio}"` : '"Sem biografia ou descrição raspada."';
+  document.getElementById('m-change-status').value = lead.status || 'Descoberto';
+
+  // Toggle platform metrics
+  const m1lbl = document.getElementById('m-metric-1-lbl');
+  const m1val = document.getElementById('m-metric-1-val');
+  const m2lbl = document.getElementById('m-metric-2-lbl');
+  const m2val = document.getElementById('m-metric-2-val');
+  const addrContainer = document.getElementById('m-address-container');
+
+  if (lead.platform === 'Google Maps') {
+    document.getElementById('m-platform-label').innerHTML = '<span class="badge ba">Google Maps</span>';
+    m1lbl.textContent = 'Média Google';
+    m1val.textContent = lead.rating ? `${lead.rating} ★` : 'Sem nota';
+    m2lbl.textContent = 'Avaliações';
+    m2val.textContent = lead.reviews ? `${lead.reviews} reviews` : 'Sem avaliações';
+    addrContainer.style.display = 'block';
+    document.getElementById('m-address').textContent = lead.address || 'Não informado';
+  } else {
+    document.getElementById('m-platform-label').innerHTML = '<span class="badge bb">Instagram</span>';
+    m1lbl.textContent = 'Seguidores';
+    m1val.textContent = lead.followers ? lead.followers.toLocaleString('pt-BR') : 'Não informado';
+    m2lbl.textContent = 'Engajamento';
+    m2val.textContent = 'Qualificado por IA';
+    addrContainer.style.display = 'none';
+  }
+
+  // Populate Claude Qualification Area
+  renderLeadModalClaudeSection();
+
+  // Show Modal Overlay
+  document.getElementById('lead-details-modal').classList.add('active');
+}
+
+function renderLeadModalClaudeSection() {
+  const container = document.getElementById('claude-result-container');
+  if (!selectedLead) return;
+
+  const isQualified = selectedLead.status !== 'Descoberto';
+
+  if (!isQualified && (!selectedLead.claude_analysis || selectedLead.claude_analysis.includes('Aguardando'))) {
+    container.innerHTML = `
+      <div class="ai-block not-qualified">
+        <div style="font-size:24px; margin-bottom:8px">🧠</div>
+        <div style="font-weight:600; margin-bottom:4px; color:var(--text)">Lead ainda não qualificado</div>
+        <div style="font-size:12px; color:var(--text-3); margin-bottom:14px; line-height:1.4">Use o poder do Claude para analisar este perfil pet e criar um script de abordagem personalizada via WhatsApp ou Direct.</div>
+        <button class="btn btn-dark" style="margin:0 auto" onclick="triggerClaudeQualification()">Qualificar com Claude IA</button>
+      </div>
+    `;
+  } else {
+    // Score stars rendering
+    let starsHtml = '';
+    for (let i = 1; i <= 10; i++) {
+      if (i <= selectedLead.score) {
+        starsHtml += '<span style="color:#C29C38; font-size:15px">★</span>';
+      } else {
+        starsHtml += '<span style="color:rgba(255,255,255,0.1); font-size:15px">☆</span>';
+      }
+    }
+
+    container.innerHTML = `
+      <div style="background:var(--purple-bg); border:1px solid var(--purple-border); padding:14px; border-radius:var(--r); margin-bottom:12px; box-shadow:0 0 10px rgba(91,46,136,0.15)">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <strong style="color:#C8A4F4; font-size:13.5px">Análise Inteligente (Pet Hub)</strong>
+          <div>${starsHtml} <strong style="font-family:'DM Mono',monospace; color:#C8A4F4; font-size:12.5px">${selectedLead.score}/10</strong></div>
+        </div>
+        <div style="font-size:12.5px; color:#C8A4F4; line-height:1.55">${selectedLead.claude_analysis}</div>
+      </div>
+
+      <div class="modal-section-title" style="margin-top:14px">Script de Abordagem Personalizado</div>
+      <div class="copy-block" id="block-copy-text">${selectedLead.suggested_message}
+        <button class="copy-btn" onclick="copyApproachMessage()">Copiar</button>
+      </div>
+    `;
+  }
+}
+
+function closeLeadModal(event) {
+  if (event === null || event.target.classList.contains('modal-overlay')) {
+    document.getElementById('lead-details-modal').classList.remove('active');
+    selectedLead = null;
+  }
+}
+
+function copyApproachMessage() {
+  const container = document.getElementById('block-copy-text');
+  if (!container) return;
+
+  // Extract text nodes ignoring the copy-btn
+  let text = '';
+  for (let i = 0; i < container.childNodes.length; i++) {
+    const node = container.childNodes[i];
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent;
+    }
+  }
+
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    const btn = container.querySelector('.copy-btn');
+    if (btn) {
+      btn.textContent = 'Copiado!';
+      setTimeout(() => btn.textContent = 'Copiar', 2000);
+    }
+  }).catch(e => {
+    alert('Erro ao copiar texto: ' + e);
+  });
+}
+
+// --- UPDATE LEAD STATUS VIA API ---
+async function changeLeadStatus() {
+  if (!selectedLead) return;
+
+  const newStatus = document.getElementById('m-change-status').value;
+  try {
+    const response = await fetch(`/api/leads/${selectedLead.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+
+    if (response.ok) {
+      const updated = await response.json();
+      
+      // Update selected lead state
+      selectedLead = updated;
+      
+      // Sync local array
+      const idx = leadsList.findIndex(l => l.id === selectedLead.id);
+      if (idx !== -1) leadsList[idx] = selectedLead;
+
+      updateDashboardStats();
+      renderPipeline();
+      renderCRMTable();
+      renderLeadModalClaudeSection();
+    }
+  } catch (e) {
+    console.error('Erro ao atualizar status do lead:', e);
+  }
+}
+
+// --- DELETE LEAD VIA API ---
+async function deleteActiveLead() {
+  if (!selectedLead) return;
+  if (!confirm(`Tem certeza que deseja excluir o lead ${selectedLead.name}?`)) return;
+
+  try {
+    const response = await fetch(`/api/leads/${selectedLead.id}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      document.getElementById('lead-details-modal').classList.remove('active');
+      await loadLeads();
+      selectedLead = null;
+    }
+  } catch (e) {
+    console.error('Erro ao excluir lead:', e);
+  }
+}
+
+async function deleteLead(id) {
+  const lead = leadsList.find(l => l.id === id);
+  if (!lead) return;
+  if (!confirm(`Tem certeza que deseja excluir o lead ${lead.name}?`)) return;
+
+  try {
+    const response = await fetch(`/api/leads/${id}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      await loadLeads();
+    }
+  } catch (e) {
+    console.error('Erro ao excluir lead:', e);
+  }
+}
+
+// --- MANUAL LEAD MODAL OPEN/CLOSE ---
+function openManualLeadModal() {
+  document.getElementById('manual-lead-modal').classList.add('active');
+}
+
+function closeManualLeadModal(event) {
+  if (event === null || event.target.classList.contains('modal-overlay')) {
+    document.getElementById('manual-lead-modal').classList.remove('active');
+    
+    // Reset fields
+    document.getElementById('manual-name').value = '';
+    document.getElementById('manual-platform').value = 'Instagram';
+    document.getElementById('manual-handle').value = '';
+    document.getElementById('manual-segment').value = 'Pet Shop';
+    document.getElementById('manual-phone').value = '';
+    document.getElementById('manual-email').value = '';
+    document.getElementById('manual-bio').value = '';
+    document.getElementById('manual-address').value = '';
+  }
+}
+
+async function submitManualLead() {
+  const name = document.getElementById('manual-name').value;
+  const platform = document.getElementById('manual-platform').value;
+  const handle = document.getElementById('manual-handle').value;
+  const segment = document.getElementById('manual-segment').value;
+  const phone = document.getElementById('manual-phone').value;
+  const email = document.getElementById('manual-email').value;
+  const bio = document.getElementById('manual-bio').value;
+  const address = document.getElementById('manual-address').value;
+
+  if (!name) {
+    alert('O nome do estabelecimento pet é obrigatório.');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, platform, handle, segment, phone, email, bio, address
+      })
+    });
+
+    if (response.ok) {
+      closeManualLeadModal(null);
+      await loadLeads();
+    } else {
+      const err = await response.json();
+      alert(`Falha ao cadastrar lead: ${err.error || 'Erro interno'}`);
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Erro ao enviar dados para o servidor.');
+  }
+}
+
+// --- SIMULATED BULK ACTIONS ---
+function simulateBulkDispatches() {
+  alert('Disparo efetuado com sucesso! A IA gerou mensagens personalizadas baseadas no segmento de cada destinatário e disparou via simulação de WhatsApp/Direct.');
+}
+
+// --- COMPOSE CHARACTERS COUNTER ---
+function countChars() {
+  const el = document.getElementById('msg-area');
+  const cnt = document.getElementById('char-cnt');
+  if (el && cnt) cnt.textContent = el.value.length;
+}
+
+// --- CHART RENDERING (CHART.JS) ---
+let chartInst = null;
+function renderChart() {
+  const ctx = document.getElementById('metaChart');
+  if (!ctx) return;
+  if (chartInst) chartInst.destroy();
+  
+  const labels = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    labels.push(d.getDate() + '/' + (d.getMonth() + 1));
+  }
+  
+  const data = [1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5];
+  
+  chartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#5B2E88',
+        backgroundColor: 'rgba(91, 46, 136, 0.12)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointBackgroundColor: '#6A3B99',
+        pointHoverBackgroundColor: '#FDFCF9',
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0e0d21',
+          borderColor: 'rgba(91, 46, 136, 0.3)',
+          borderWidth: 1,
+          titleColor: '#FDFCF9',
+          bodyColor: '#FDFCF9',
+          padding: 9,
+          cornerRadius: 7,
+          callbacks: { label: c => c.parsed.y + ' leads totais' }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 10, family: "'DM Mono', monospace" }, color: '#75718E', maxTicksLimit: 8 },
+          border: { display: false }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.02)' },
+          ticks: { font: { size: 10, family: "'DM Mono', monospace" }, color: '#75718E', stepSize: 1 },
+          border: { display: false }
+        }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
