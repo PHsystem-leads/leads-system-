@@ -93,7 +93,7 @@ app.get('/api/status', (req, res) => {
     apify: !!process.env.APIFY_API_KEY,
     claude: !!process.env.CLAUDE_API_KEY,
     openrouter: !!process.env.OPENROUTER_API_KEY,
-    openrouterModel: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat',
+    openrouterModel: (process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat').trim().replace(/\.+$/, ''),
     supabase: !!supabase,
     port: PORT
   });
@@ -609,7 +609,7 @@ app.post('/api/leads/qualify', async (req, res) => {
   const lead = leads[idx];
   const claudeKey = process.env.CLAUDE_API_KEY;
   const openrouterKey = process.env.OPENROUTER_API_KEY;
-  const openrouterModel = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
+  const openrouterModel = (process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat').trim().replace(/\.+$/, '');
 
   let qualifiedFields = {};
 
