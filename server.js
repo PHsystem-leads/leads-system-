@@ -410,7 +410,7 @@ app.post('/api/leads/search', async (req, res) => {
     let input = {};
 
     if (platform === 'Google Maps') {
-      actorId = 'apify/google-maps-scraper';
+      actorId = 'apify~google-maps-scraper';
       const searchQueries = [`${query || 'Pet Shop'} em ${location || 'São Paulo'}`];
       input = {
         searchQueries,
@@ -420,7 +420,7 @@ app.post('/api/leads/search', async (req, res) => {
         includeReviews: false
       };
     } else {
-      actorId = 'apify/instagram-scraper';
+      actorId = 'apify~instagram-scraper';
       input = {
         search: hashtag || query || 'petshop',
         searchType: 'hashtag',
