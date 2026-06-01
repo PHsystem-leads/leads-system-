@@ -411,9 +411,9 @@ app.post('/api/leads/search', async (req, res) => {
 
     if (platform === 'Google Maps') {
       actorId = 'compass~crawler-google-places';
-      const searchQueries = [`${query || 'Pet Shop'} em ${location || 'São Paulo'}`];
+      const searchStringsArray = [`${query || 'Pet Shop'} em ${location || 'São Paulo'}`];
       input = {
-        searchQueries,
+        searchStringsArray,
         maxCrawledPlacesPerSearch: limit,
         language: 'pt-BR',
         exportPlaceUrls: false,
