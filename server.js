@@ -428,7 +428,7 @@ app.post('/api/leads/search', async (req, res) => {
       };
     }
 
-    const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyKey}`;
+    const runUrl = `https://api.apify.com/v2/actors/${actorId}/runs?token=${apifyKey}`;
     const startRes = await fetch(runUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
