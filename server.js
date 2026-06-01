@@ -95,8 +95,109 @@ app.get('/api/status', (req, res) => {
     openrouter: !!process.env.OPENROUTER_API_KEY,
     openrouterModel: (process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat').trim().replace(/\.+$/, ''),
     supabase: !!supabase,
+    evolutionApi: !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE),
     port: PORT
   });
+});
+
+// --- EVOLUTION API (WHATSAPP) INTEGRATION ---
+const evolutionBaseUrl = process.env.EVOLUTION_API_URL || '';
+const evolutionApiKey  = process.env.EVOLUTION_API_KEY  || '';
+const evolutionInstance = process.env.EVOLUTION_INSTANCE || 'pethub';
+
+// Sanitize phone number to international format (55XXXXXXXXXXX)
+function sanitizePhone(phone) {
+  if (!phone) return null;
+  // Remove all non-digits
+  let digits = phone.replace(/\D/g, '');
+  // If starts with 0, strip it
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  // If doesn't start with country code 55, prepend it
+  if (!digits.startsWith('55')) digits = '55' + digits;
+  // Must have at least 12 digits (55 + DDD + 9 digits)
+  if (digits.length < 12) return null;
+  return digits;
+}
+
+async function sendWhatsAppMessage(phone, message) {
+  if (!evolutionBaseUrl || !evolutionApiKey) {
+    console.log('[Evolution API] N\u00e3o configurada, pulando envio de WhatsApp.');
+    return { skipped: true, reason: 'Evolution API n\u00e3o configurada.' };
+  }
+
+  const sanitized = sanitizePhone(phone);
+  if (!sanitized) {
+    console.warn('[Evolution API] N\u00famero inv\u00e1lido, pulando envio:', phone);
+    return { skipped: true, reason: 'N\u00famero de telefone inv\u00e1lido.' };
+  }
+
+  const url = `${evolutionBaseUrl}/message/sendText/${evolutionInstance}`;
+  console.log(`[Evolution API] Enviando WhatsApp para ${sanitized}...`);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': evolutionApiKey
+    },
+    body: JSON.stringify({
+      number: sanitized,
+      text: message
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Evolution API erro ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  console.log(`[Evolution API] Mensagem enviada com sucesso para ${sanitized}!`);
+  return data;
+}
+
+// Get Evolution API QR Code for connection
+app.get('/api/whatsapp/qr', async (req, res) => {
+  if (!evolutionBaseUrl || !evolutionApiKey) {
+    return res.status(400).json({ error: 'Evolution API n\u00e3o configurada no .env.' });
+  }
+  try {
+    const r = await fetch(`${evolutionBaseUrl}/instance/connect/${evolutionInstance}`, {
+      headers: { 'apikey': evolutionApiKey }
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get Evolution API connection status
+app.get('/api/whatsapp/status', async (req, res) => {
+  if (!evolutionBaseUrl || !evolutionApiKey) {
+    return res.json({ connected: false, reason: 'N\u00e3o configurado' });
+  }
+  try {
+    const r = await fetch(`${evolutionBaseUrl}/instance/connectionState/${evolutionInstance}`, {
+      headers: { 'apikey': evolutionApiKey }
+    });
+    const data = await r.json();
+    const connected = data?.instance?.state === 'open';
+    res.json({ connected, state: data?.instance?.state, data });
+  } catch (e) {
+    res.json({ connected: false, error: e.message });
+  }
+});
+
+// Send test WhatsApp message
+app.post('/api/whatsapp/test', async (req, res) => {
+  const { phone, message } = req.body;
+  try {
+    const result = await sendWhatsAppMessage(phone, message || 'Teste do Pet Hub Leads! \uD83D\uDC3E');
+    res.json({ success: true, result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // --- CRM REST ENDPOINTS ---
@@ -862,7 +963,7 @@ app.post('/api/leads/qualify', async (req, res) => {
 });
 
 // --- APPROACH LEAD HELPER ---
-// Marks a Qualificado lead as Abordado and logs the outreach attempt
+// Marks a Qualificado lead as Abordado AND sends the WhatsApp message via Evolution API
 async function approachLeadById(leadId) {
   const leads = await readLeads();
   const idx = leads.findIndex(l => l.id === leadId);
@@ -872,13 +973,29 @@ async function approachLeadById(leadId) {
   if (lead.status !== 'Qualificado') throw new Error('Lead não está na etapa Qualificado.');
 
   const timestamp = new Date().toISOString();
+  console.log(`[Autopilot] Abordando lead "${lead.name}" via WhatsApp...`);
+
+  // Send WhatsApp message if phone is available
+  let whatsappSent = false;
+  let whatsappError = null;
+  if (lead.phone && lead.suggested_message && !lead.suggested_message.includes('Mensagem sugerida indisponível')) {
+    try {
+      const sendResult = await sendWhatsAppMessage(lead.phone, lead.suggested_message);
+      whatsappSent = !sendResult.skipped;
+      console.log(`[Evolution API] Status envio para ${lead.name}: ${whatsappSent ? 'ENVIADO' : 'PULADO'}`);
+    } catch (e) {
+      whatsappError = e.message;
+      console.error(`[Evolution API] Falha ao enviar para ${lead.name}:`, e.message);
+    }
+  } else {
+    console.log(`[Autopilot] Lead "${lead.name}" sem telefone ou mensagem gerada, apenas marcando como Abordado.`);
+  }
+
   const updatedFields = {
     status: 'Abordado',
     updated_at: timestamp,
     updatedAt: timestamp
   };
-
-  console.log(`[Autopilot] Marcando lead "${lead.name}" como Abordado (abordagem registrada automaticamente).`);
 
   if (supabase) {
     const { data, error } = await supabase
@@ -887,7 +1004,7 @@ async function approachLeadById(leadId) {
       .eq('id', leadId)
       .select();
     if (error) throw error;
-    return { ...data[0], updatedAt: data[0].updated_at };
+    return { ...data[0], updatedAt: data[0].updated_at, whatsappSent, whatsappError };
   } else {
     leads[idx] = { ...lead, ...updatedFields };
     await writeLocalLeads(leads);

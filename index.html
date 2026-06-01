@@ -682,6 +682,14 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
               </div>
               <span class="badge br" id="config-status-supabase">Desconectado</span>
             </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <strong>WhatsApp (Evolution API)</strong>
+                <div style="font-size:11.5px; color:var(--text-3)">Envia mensagens reais automaticamente no WhatsApp durante a pipeline.</div>
+              </div>
+              <span class="badge br" id="config-status-evolution">Não configurado</span>
+            </div>
           </div>
 
           <h2>Como Configurar suas Credenciais</h2>
@@ -715,6 +723,52 @@ Seu objetivo é analisar as informações do lead pet e retornar:
               </textarea>
               <div style="font-size:11.5px; color:var(--text-3); margin-top:5px">Este prompt garante que a IA analise a biografia, avaliações e dados geográficos do lead pet para criar um texto altamente convincente e customizado.</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ WHATSAPP CONNECTION PANEL ═══ -->
+      <div style="margin-top:20px">
+        <h2>Conexão WhatsApp (Evolution API)</h2>
+        <div class="card" style="display:flex; gap:24px; flex-wrap:wrap">
+          <!-- Left: Setup Instructions -->
+          <div style="flex:1.2; min-width:260px">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px">
+              <div class="ai-dot" id="wa-status-dot" style="width:10px;height:10px;background:#DC2626;box-shadow:0 0 6px #DC2626;flex-shrink:0"></div>
+              <strong id="wa-status-label" style="font-size:13.5px">WhatsApp: Desconectado</strong>
+              <button class="btn-xs" onclick="checkWAStatus()" style="margin-left:auto">Atualizar</button>
+            </div>
+
+            <div style="font-size:12.5px; color:var(--text-2); line-height:1.6; margin-bottom:14px">
+              Para enviar mensagens automáticas, configure a <strong>Evolution API</strong> e escaneie o QR code com seu WhatsApp.
+            </div>
+
+            <div style="background:rgba(8,7,26,0.5); border:1px solid var(--border); border-radius:var(--r); padding:14px; font-size:12px; margin-bottom:14px">
+              <div style="font-weight:600; color:var(--text-2); margin-bottom:8px; font-size:11px; letter-spacing:.06em; text-transform:uppercase">Variáveis no .env</div>
+              <code style="display:block; color:#C8A4F4; line-height:2">EVOLUTION_API_URL=http://localhost:8080<br>EVOLUTION_API_KEY=sua-chave-aqui<br>EVOLUTION_INSTANCE=pethub</code>
+            </div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap">
+              <button class="btn btn-dark" onclick="loadWAQRCode()" style="flex:1; justify-content:center">
+                📱 Escanear QR Code
+              </button>
+              <button class="btn" onclick="testWAMessage()" style="flex:1; justify-content:center">
+                📩 Testar Envio
+              </button>
+            </div>
+
+            <div style="margin-top:14px; font-size:12px; color:var(--text-3); line-height:1.5">
+              💡 <strong>Instalação rápida:</strong> Use Docker: <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:3px">docker run -p 8080:8080 atendai/evolution-api:latest</code>
+            </div>
+          </div>
+
+          <!-- Right: QR Code Display -->
+          <div style="flex:1; min-width:200px; display:flex; flex-direction:column; align-items:center; justify-content:center">
+            <div id="wa-qr-container" style="width:180px;height:180px;background:rgba(8,7,26,0.5);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+              <div style="font-size:32px">📱</div>
+              <div style="font-size:11px;color:var(--text-3);text-align:center">Clique em "Escanear QR Code"<br>para conectar seu WhatsApp</div>
+            </div>
+            <div id="wa-qr-hint" style="font-size:11px;color:var(--text-3);margin-top:8px;text-align:center">Escâner pelo WhatsApp &gt; Dispositivos conectados &gt; Conectar</div>
           </div>
         </div>
       </div>
@@ -1046,6 +1100,22 @@ function updateStatusBadges() {
     }
   }
 
+  // Evolution API / WhatsApp Status
+  const configEvolution = document.getElementById('config-status-evolution');
+  if (apiStatus.evolutionApi) {
+    if (configEvolution) {
+      configEvolution.className = 'badge bg';
+      configEvolution.textContent = 'Configurado';
+    }
+    // Check actual connection status async
+    checkWAStatus();
+  } else {
+    if (configEvolution) {
+      configEvolution.className = 'badge br';
+      configEvolution.textContent = 'Não configurado';
+    }
+  }
+
   // Info Box text in Captação IA
   const infoBox = document.getElementById('info-connection-status');
   if (infoBox) {
@@ -1058,7 +1128,8 @@ function updateStatusBadges() {
       const activeIaName = apiStatus.openrouter 
         ? `OpenRouter (Modelo: ${apiStatus.openrouterModel.split('/').pop()})`
         : 'Anthropic Claude';
-      infoBox.innerHTML = `<strong>Apify e ${activeIaName} Ativos!</strong> As buscas rasparão dados reais públicos do Google Maps e Instagram e qualificarão automaticamente com a inteligência artificial.`;
+      const waLabel = apiStatus.evolutionApi ? ' · 📱 WhatsApp Ativo' : '';
+      infoBox.innerHTML = `<strong>Apify e ${activeIaName} Ativos${waLabel}!</strong> As buscas rasparão dados reais públicos do Google Maps e Instagram e qualificarão automaticamente com a inteligência artificial.`;
     } else {
       infoBox.className = 'info-box';
       infoBox.style.background = 'var(--amber-bg)';
@@ -1738,7 +1809,80 @@ function countChars() {
   if (el && cnt) cnt.textContent = el.value.length;
 }
 
-// --- CHART RENDERING (CHART.JS) ---
+// --- WHATSAPP (EVOLUTION API) PANEL FUNCTIONS ---
+async function checkWAStatus() {
+  const dot = document.getElementById('wa-status-dot');
+  const label = document.getElementById('wa-status-label');
+  const badge = document.getElementById('config-status-evolution');
+  try {
+    const res = await fetch('/api/whatsapp/status');
+    const data = await res.json();
+    if (data.connected) {
+      if (dot) { dot.style.background = '#16A34A'; dot.style.boxShadow = '0 0 6px #16A34A'; }
+      if (label) label.textContent = 'WhatsApp: Conectado ✔';
+      if (badge) { badge.className = 'badge bg'; badge.textContent = 'Conectado'; }
+    } else {
+      if (dot) { dot.style.background = '#DC2626'; dot.style.boxShadow = '0 0 6px #DC2626'; }
+      if (label) label.textContent = `WhatsApp: ${data.state || 'Desconectado'}`;
+      if (badge) { badge.className = 'badge br'; badge.textContent = 'Desconectado'; }
+    }
+  } catch(e) {
+    if (dot) { dot.style.background = '#D97706'; dot.style.boxShadow = '0 0 6px #D97706'; }
+    if (label) label.textContent = 'WhatsApp: Evolution API offline';
+  }
+}
+
+async function loadWAQRCode() {
+  const container = document.getElementById('wa-qr-container');
+  const hint = document.getElementById('wa-qr-hint');
+  if (container) {
+    container.innerHTML = `<div class="ai-dot" style="width:12px;height:12px;background:var(--purple);box-shadow:0 0 8px var(--purple)"></div><div style="font-size:11px;color:var(--text-2);margin-top:8px">Gerando QR Code...</div>`;
+  }
+  try {
+    const res = await fetch('/api/whatsapp/qr');
+    if (!res.ok) throw new Error((await res.json()).error || 'Erro ao gerar QR');
+    const data = await res.json();
+    
+    // Evolution API returns base64 QR code in data.qrcode.base64 or data.base64
+    const qrBase64 = data?.qrcode?.base64 || data?.base64 || null;
+    
+    if (qrBase64 && container) {
+      container.innerHTML = `<img src="data:image/png;base64,${qrBase64}" style="width:170px;height:170px;border-radius:6px" alt="WhatsApp QR Code">`;
+      if (hint) hint.textContent = 'Abra WhatsApp > Dispositivos conectados > Conectar dispositivo > Escaneie este QR';
+    } else if (data?.instance?.state === 'open') {
+      container.innerHTML = `<div style="font-size:32px">✅</div><div style="font-size:12px;color:var(--green);font-weight:600;margin-top:8px">WhatsApp Conectado!</div>`;
+      checkWAStatus();
+    } else {
+      container.innerHTML = `<div style="font-size:11px;color:var(--amber);text-align:center;padding:12px">Resposta inesperada. Verifique se a Evolution API está rodando.</div>`;
+    }
+  } catch(e) {
+    if (container) container.innerHTML = `<div style="font-size:11px;color:var(--red);text-align:center;padding:12px">❌ Erro: ${e.message}</div>`;
+  }
+}
+
+async function testWAMessage() {
+  const phone = prompt('Digite o número com DDD para teste (ex: 11999998888):');
+  if (!phone) return;
+  try {
+    const res = await fetch('/api/whatsapp/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, message: 'Teste do Pet Hub Leads! 🐾 Sistema de automação de prospecção ativo e funcionando.' })
+    });
+    const data = await res.json();
+    if (data.success && !data.result?.skipped) {
+      alert('✅ Mensagem enviada com sucesso! Verifique o WhatsApp do número: ' + phone);
+    } else if (data.result?.skipped) {
+      alert('⚠️ Envio pulado: ' + (data.result.reason || 'Evolution API não configurada no .env'));
+    } else {
+      alert('❌ Falha: ' + (data.error || 'Erro desconhecido'));
+    }
+  } catch(e) {
+    alert('❌ Erro de conexão: ' + e.message);
+  }
+}
+
+
 let chartInst = null;
 function renderChart() {
   const ctx = document.getElementById('metaChart');
