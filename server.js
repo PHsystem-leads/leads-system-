@@ -5,6 +5,7 @@ import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -20,40 +21,94 @@ app.use(express.static(__dirname)); // Serves root static files including index.
 
 const LEADS_FILE = path.join(__dirname, 'leads.json');
 
-// --- DATABASE HELPERS ---
+// --- SUPABASE CLIENT INITIALIZATION ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+let supabase = null;
+if (supabaseUrl && supabaseAnonKey) {
+  console.log('[Supabase] Credenciais detectadas. Inicializando cliente...');
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+} else {
+  console.log('[Supabase] Sem credenciais no .env. Utilizando leads.json local para persistência.');
+}
+
+// --- DATABASE OPERATIONS ---
+
+// Helper to read leads list
 async function readLeads() {
+  if (supabase) {
+    try {
+      console.log('[Supabase] Buscando leads do banco de dados em nuvem...');
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Map Supabase snake_case fields to frontend camelCase if necessary
+      return (data || []).map(l => ({
+        id: l.id,
+        name: l.name,
+        handle: l.handle,
+        platform: l.platform,
+        segment: l.segment,
+        score: l.score,
+        status: l.status,
+        phone: l.phone,
+        email: l.email,
+        address: l.address,
+        bio: l.bio,
+        followers: l.followers,
+        rating: l.rating ? parseFloat(l.rating) : null,
+        reviews: l.reviews,
+        claude_analysis: l.claude_analysis,
+        suggested_message: l.suggested_message,
+        updatedAt: l.updated_at
+      }));
+    } catch (e) {
+      console.error('[Supabase Error] Falha ao ler do Supabase, recorrendo ao banco local:', e.message);
+    }
+  }
+
+  // Fallback to local leads.json
   try {
     const data = await fs.readFile(LEADS_FILE, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
-    // If file doesn't exist, return empty array
     return [];
   }
 }
 
-async function writeLeads(leads) {
+// Helper to write to local cache (only used in fallback mode)
+async function writeLocalLeads(leads) {
   await fs.writeFile(LEADS_FILE, JSON.stringify(leads, null, 2), 'utf-8');
 }
 
-// --- APIS STATUS ---
+// --- API STATUS ENDPOINT ---
 app.get('/api/status', (req, res) => {
   res.json({
     apify: !!process.env.APIFY_API_KEY,
     claude: !!process.env.CLAUDE_API_KEY,
+    supabase: !!supabase,
     port: PORT
   });
 });
 
 // --- CRM REST ENDPOINTS ---
+
+// Fetch all leads
 app.get('/api/leads', async (req, res) => {
   try {
     const leads = await readLeads();
     res.json(leads);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao ler os leads.' });
+    res.status(500).json({ error: 'Erro ao obter os leads da base.' });
   }
 });
 
+// Create lead manually
 app.post('/api/leads', async (req, res) => {
   try {
     const { name, handle, platform, segment, score, phone, email, bio, address } = req.body;
@@ -61,7 +116,7 @@ app.post('/api/leads', async (req, res) => {
       return res.status(400).json({ error: 'Nome e plataforma são obrigatórios.' });
     }
 
-    const leads = await readLeads();
+    const timestamp = new Date().toISOString();
     const newLead = {
       id: `lead-${Date.now()}`,
       name,
@@ -76,56 +131,146 @@ app.post('/api/leads', async (req, res) => {
       address: address || '',
       claude_analysis: 'Lead inserido manualmente no CRM.',
       suggested_message: 'Mensagem sugerida indisponível. Clique em "Qualificar com IA" para gerar.',
-      updatedAt: new Date().toISOString()
+      updatedAt: timestamp
     };
 
-    leads.unshift(newLead);
-    await writeLeads(leads);
-    res.status(201).json(newLead);
+    if (supabase) {
+      console.log('[Supabase] Gravando novo lead no banco em nuvem...');
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{
+          id: newLead.id,
+          name: newLead.name,
+          handle: newLead.handle,
+          platform: newLead.platform,
+          segment: newLead.segment,
+          score: newLead.score,
+          status: newLead.status,
+          phone: newLead.phone,
+          email: newLead.email,
+          address: newLead.address,
+          bio: newLead.bio,
+          claude_analysis: newLead.claude_analysis,
+          suggested_message: newLead.suggested_message,
+          updated_at: timestamp
+        }])
+        .select();
+
+      if (error) throw error;
+      res.status(201).json({
+        ...data[0],
+        updatedAt: data[0].updated_at
+      });
+    } else {
+      const leads = await readLeads();
+      leads.unshift(newLead);
+      await writeLocalLeads(leads);
+      res.status(201).json(newLead);
+    }
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar o lead.' });
+    console.error('[Create Lead Error]', error);
+    res.status(500).json({ error: `Erro ao salvar o lead: ${error.message}` });
   }
 });
 
+// Update lead status/details
 app.put('/api/leads/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updateFields = req.body;
+    const timestamp = new Date().toISOString();
 
-    const leads = await readLeads();
-    const idx = leads.findIndex(l => l.id === id);
+    if (supabase) {
+      console.log(`[Supabase] Atualizando lead ${id} no banco em nuvem...`);
+      
+      const dbUpdate = {
+        name: updateFields.name,
+        handle: updateFields.handle,
+        platform: updateFields.platform,
+        segment: updateFields.segment,
+        score: updateFields.score,
+        status: updateFields.status,
+        phone: updateFields.phone,
+        email: updateFields.email,
+        address: updateFields.address,
+        bio: updateFields.bio,
+        followers: updateFields.followers,
+        rating: updateFields.rating,
+        reviews: updateFields.reviews,
+        claude_analysis: updateFields.claude_analysis,
+        suggested_message: updateFields.suggested_message,
+        updated_at: timestamp
+      };
 
-    if (idx === -1) {
-      return res.status(404).json({ error: 'Lead não encontrado.' });
+      // Remove undefined values to avoid overwriting database fields
+      Object.keys(dbUpdate).forEach(key => dbUpdate[key] === undefined && delete dbUpdate[key]);
+
+      const { data, error } = await supabase
+        .from('leads')
+        .update(dbUpdate)
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: 'Lead não encontrado no Supabase.' });
+      }
+
+      res.json({
+        ...data[0],
+        updatedAt: data[0].updated_at
+      });
+    } else {
+      const leads = await readLeads();
+      const idx = leads.findIndex(l => l.id === id);
+
+      if (idx === -1) {
+        return res.status(404).json({ error: 'Lead não encontrado.' });
+      }
+
+      leads[idx] = {
+        ...leads[idx],
+        ...updateFields,
+        updatedAt: timestamp
+      };
+
+      await writeLocalLeads(leads);
+      res.json(leads[idx]);
     }
-
-    leads[idx] = {
-      ...leads[idx],
-      ...updateFields,
-      updatedAt: new Date().toISOString()
-    };
-
-    await writeLeads(leads);
-    res.json(leads[idx]);
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao atualizar o lead.' });
+    console.error('[Update Lead Error]', error);
+    res.status(500).json({ error: `Erro ao atualizar o lead: ${error.message}` });
   }
 });
 
+// Delete lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const leads = await readLeads();
-    const filteredLeads = leads.filter(l => l.id !== id);
 
-    if (leads.length === filteredLeads.length) {
-      return res.status(404).json({ error: 'Lead não encontrado.' });
+    if (supabase) {
+      console.log(`[Supabase] Excluindo lead ${id} no banco em nuvem...`);
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      res.json({ success: true, message: 'Lead excluído com sucesso do Supabase.' });
+    } else {
+      const leads = await readLeads();
+      const filteredLeads = leads.filter(l => l.id !== id);
+
+      if (leads.length === filteredLeads.length) {
+        return res.status(404).json({ error: 'Lead não encontrado.' });
+      }
+
+      await writeLocalLeads(filteredLeads);
+      res.json({ success: true, message: 'Lead excluído com sucesso.' });
     }
-
-    await writeLeads(filteredLeads);
-    res.json({ success: true, message: 'Lead excluído com sucesso.' });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao excluir o lead.' });
+    console.error('[Delete Lead Error]', error);
+    res.status(500).json({ error: `Erro ao excluir o lead: ${error.message}` });
   }
 });
 
@@ -142,14 +287,11 @@ app.post('/api/leads/search', async (req, res) => {
   if (!apifyKey) {
     // --- SIMULATION MODE ---
     console.log(`[Apify Simulator] Executando busca de leads pet na plataforma ${platform}...`);
-    
-    // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 3500));
 
     const simulatedLeads = [];
     const normalizedQuery = (query || hashtag || 'Pet Shop').toLowerCase();
     
-    // Determine Segment based on query
     let segment = 'Pet Shop';
     if (normalizedQuery.includes('vet') || normalizedQuery.includes('clinic')) segment = 'Clínica Veterinária';
     else if (normalizedQuery.includes('banho') || normalizedQuery.includes('tosa') || normalizedQuery.includes('estet')) segment = 'Banho e Tosa';
@@ -175,7 +317,7 @@ app.post('/api/leads/search', async (req, res) => {
           handle: place.address.split(' - ')[0],
           platform: 'Google Maps',
           segment,
-          score: Math.floor(Math.random() * 4) + 6, // 6-9
+          score: Math.floor(Math.random() * 4) + 6,
           status: 'Descoberto',
           rating: place.rating,
           reviews: place.reviews,
@@ -189,7 +331,6 @@ app.post('/api/leads/search', async (req, res) => {
         });
       }
     } else {
-      // Instagram Simulator
       const accounts = [
         { handle: '@patinhasfelizespet', followers: 12400, bio: 'Banho & Tosa com carinho! Pet shop completo, rações premium e os melhores brinquedos. Atendimento em domicílio. 🐾' },
         { handle: '@clinicavetvital', followers: 23100, bio: 'Veterinário com amor. Consultas, vacinação, exames laboratoriais e cirurgias. Agende por direct ou whats!' },
@@ -206,7 +347,7 @@ app.post('/api/leads/search', async (req, res) => {
           handle: acc.handle,
           platform: 'Instagram',
           segment,
-          score: Math.floor(Math.random() * 5) + 5, // 5-9
+          score: Math.floor(Math.random() * 5) + 5,
           status: 'Descoberto',
           followers: acc.followers,
           phone: `+55 11 9${Math.floor(10000000 + Math.random() * 90000000)}`,
@@ -219,12 +360,40 @@ app.post('/api/leads/search', async (req, res) => {
       }
     }
 
-    // Persist new leads to database
+    // Save newly simulated leads list
     const currentLeads = await readLeads();
-    // Add only new ones (avoid duplicating by handle)
     const filteredSimulated = simulatedLeads.filter(sim => !currentLeads.some(cur => cur.handle === sim.handle));
-    const updatedLeads = [...filteredSimulated, ...currentLeads];
-    await writeLeads(updatedLeads);
+
+    if (supabase) {
+      console.log(`[Supabase] Batch-inserindo ${filteredSimulated.length} leads no banco em nuvem...`);
+      const insertData = filteredSimulated.map(l => ({
+        id: l.id,
+        name: l.name,
+        handle: l.handle,
+        platform: l.platform,
+        segment: l.segment,
+        score: l.score,
+        status: l.status,
+        phone: l.phone,
+        email: l.email,
+        address: l.address,
+        bio: l.bio,
+        followers: l.followers,
+        rating: l.rating,
+        reviews: l.reviews,
+        claude_analysis: l.claude_analysis,
+        suggested_message: l.suggested_message,
+        updated_at: l.updatedAt
+      }));
+
+      if (insertData.length > 0) {
+        const { error } = await supabase.from('leads').insert(insertData);
+        if (error) throw error;
+      }
+    } else {
+      const updatedLeads = [...filteredSimulated, ...currentLeads];
+      await writeLocalLeads(updatedLeads);
+    }
 
     return res.json({
       success: true,
@@ -258,7 +427,6 @@ app.post('/api/leads/search', async (req, res) => {
       };
     }
 
-    // Trigger Actor Run
     const runUrl = `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyKey}`;
     const startRes = await fetch(runUrl, {
       method: 'POST',
@@ -273,12 +441,10 @@ app.post('/api/leads/search', async (req, res) => {
 
     const runData = await startRes.json();
     const runId = runData.data.id;
-    console.log(`[Apify API] Ator iniciado com RunID: ${runId}. Aguardando conclusão...`);
 
-    // Poll until actor completes (maximum 60 seconds of waiting to prevent timeout, usually runs faster for small limits)
     let finished = false;
     let attempts = 0;
-    const maxAttempts = 12; // 12 * 5s = 60s
+    const maxAttempts = 12;
     
     while (!finished && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 5000));
@@ -290,8 +456,6 @@ app.post('/api/leads/search', async (req, res) => {
       if (statusRes.ok) {
         const checkData = await statusRes.json();
         const status = checkData.data.status;
-        console.log(`[Apify API] Tentativa ${attempts}: status do ator é ${status}`);
-        
         if (status === 'SUCCEEDED') {
           finished = true;
         } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
@@ -303,12 +467,11 @@ app.post('/api/leads/search', async (req, res) => {
     if (!finished) {
       return res.status(202).json({
         success: true,
-        message: 'A busca foi iniciada no Apify e está demorando mais do que o esperado. Os dados serão atualizados em breve no painel.',
+        message: 'A busca foi iniciada no Apify. Recarregue a página em alguns instantes para carregar os leads raspados.',
         leads: []
       });
     }
 
-    // Fetch dataset results
     const datasetUrl = `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyKey}`;
     const datasetRes = await fetch(datasetUrl);
     
@@ -317,8 +480,6 @@ app.post('/api/leads/search', async (req, res) => {
     }
 
     const items = await datasetRes.json();
-    console.log(`[Apify API] Busca concluída! Obtidos ${items.length} itens do dataset.`);
-
     const formattedLeads = [];
     const currentLeads = await readLeads();
 
@@ -344,7 +505,6 @@ app.post('/api/leads/search', async (req, res) => {
         reviews = item.reviewsCount || null;
         bio = item.categoryName || 'Pet Shop / Veterinária';
       } else {
-        // Instagram
         handle = item.username ? `@${item.username}` : '@perfil_pet';
         name = item.fullName || handle.slice(1);
         followers = item.followersCount || null;
@@ -353,7 +513,6 @@ app.post('/api/leads/search', async (req, res) => {
         email = item.email || '';
       }
 
-      // Determine Segment
       const checkText = `${name} ${bio}`.toLowerCase();
       let segment = 'Pet Shop';
       if (checkText.includes('vet') || checkText.includes('clinic')) segment = 'Clínica Veterinária';
@@ -361,7 +520,6 @@ app.post('/api/leads/search', async (req, res) => {
       else if (checkText.includes('adestr') || checkText.includes('trein')) segment = 'Adestrador';
       else if (checkText.includes('creche') || checkText.includes('hotel') || checkText.includes('hosped')) segment = 'Creche Canina';
 
-      // Check for duplicate
       if (currentLeads.some(cur => cur.handle === handle)) {
         continue;
       }
@@ -372,7 +530,7 @@ app.post('/api/leads/search', async (req, res) => {
         handle,
         platform,
         segment,
-        score: 5, // Neutral score until qualified
+        score: 5,
         status: 'Descoberto',
         rating,
         reviews,
@@ -387,8 +545,36 @@ app.post('/api/leads/search', async (req, res) => {
       });
     }
 
-    const updatedLeads = [...formattedLeads, ...currentLeads];
-    await writeLeads(updatedLeads);
+    if (supabase) {
+      console.log(`[Supabase] Gravando ${formattedLeads.length} leads obtidos via Apify no banco...`);
+      const insertData = formattedLeads.map(l => ({
+        id: l.id,
+        name: l.name,
+        handle: l.handle,
+        platform: l.platform,
+        segment: l.segment,
+        score: l.score,
+        status: l.status,
+        phone: l.phone,
+        email: l.email,
+        address: l.address,
+        bio: l.bio,
+        followers: l.followers,
+        rating: l.rating,
+        reviews: l.reviews,
+        claude_analysis: l.claude_analysis,
+        suggested_message: l.suggested_message,
+        updated_at: l.updatedAt
+      }));
+
+      if (insertData.length > 0) {
+        const { error } = await supabase.from('leads').insert(insertData);
+        if (error) throw error;
+      }
+    } else {
+      const updatedLeads = [...formattedLeads, ...currentLeads];
+      await writeLocalLeads(updatedLeads);
+    }
 
     res.json({
       success: true,
@@ -414,23 +600,22 @@ app.post('/api/leads/qualify', async (req, res) => {
   const idx = leads.findIndex(l => l.id === leadId);
 
   if (idx === -1) {
-    return res.status(404).json({ error: 'Lead não encontrado.' });
+    return res.status(404).json({ error: 'Lead não encontrado na base.' });
   }
 
   const lead = leads[idx];
   const claudeKey = process.env.CLAUDE_API_KEY;
+
+  let qualifiedFields = {};
 
   if (!claudeKey) {
     // --- SIMULATION MODE ---
     console.log(`[Claude Simulator] Qualificando lead pet: ${lead.name}...`);
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Dynamic heuristic simulation in Portuguese
     let simulatedScore = 7;
     let simulatedAnalysis = '';
     let simulatedMsg = '';
-
-    const firstWord = lead.name.split(' ')[0] || 'parceiro';
 
     if (lead.segment === 'Clínica Veterinária') {
       simulatedScore = lead.followers && lead.followers > 10000 ? 9 : 8;
@@ -445,26 +630,24 @@ app.post('/api/leads/qualify', async (req, res) => {
       simulatedAnalysis = `Creche/Daycare pet representa um público de altíssimo tíquete médio e fidelidade. O hotel pet em feriados sofre com picos de lotação e sazonalidade. O Pet Hub agregará valor automatizando a cobrança mensal das creches por recorrência de crédito e abrindo campanhas direcionadas pré-feriados para garantir lotação máxima da hotelaria com meses de antecedência.`;
       simulatedMsg = `Olá pessoal do ${lead.name}! Que trabalho incrível vocês fazem na socialização e bem-estar dos cães, a estrutura de daycare é fantástica! Sei que gerenciar pacotes mensais de creche, controle de vacinas obrigatórias na entrada e reservas de hotelaria exige um controle minucioso. O Pet Hub automatiza todo o financeiro recorrente da creche e cria disparos automáticos inteligentes de reservas para feriados, garantindo que o seu hotel lote semanas antes das férias. Que tal agendarmos uma demonstração rápida de 10 minutos para mostrarmos o painel em ação?`;
     } else {
-      // Pet Shop or Others
       simulatedScore = 7;
       simulatedAnalysis = `Pet shop com forte apelo a rações e acessórios. Enfrenta a forte concorrência de grandes e-commerces pet. A solução do Pet Hub ajudará o estabelecimento a reter clientes locais criando disparos inteligentes pós-venda (ex: alertar o cliente quando a ração que ele comprou está perto de acabar e sugerir reposição rápida por WhatsApp com entrega local).`;
       simulatedMsg = `Olá! Tudo bem no ${lead.name}? Parabéns pela belíssima variedade de produtos pet que vocês oferecem aos tutores! Sabemos que a competição com os grandes e-commerces pet é difícil. Por isso, criamos o Pet Hub: um sistema que monitora a compra de ração do seu cliente de bairro e envia um lembrete automático de recompra rápida pelo WhatsApp exatamente 25 dias depois, com entrega expressa da sua loja. Isso blinda seus clientes contra a concorrência e recupera vendas perdidas. Toparia fazer um teste gratuito de 7 dias com nosso sistema?`;
     }
 
-    lead.score = simulatedScore;
-    lead.claude_analysis = simulatedAnalysis;
-    lead.suggested_message = simulatedMsg;
-    lead.status = 'Qualificado';
+    qualifiedFields = {
+      score: simulatedScore,
+      claude_analysis: simulatedAnalysis,
+      suggested_message: simulatedMsg,
+      status: 'Qualificado',
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    // --- REAL CLAUDE INTEGRATION ---
+    try {
+      console.log(`[Claude API] Qualificando lead pet ${lead.name} via Anthropic...`);
 
-    await writeLeads(leads);
-    return res.json(lead);
-  }
-
-  // --- REAL CLAUDE INTEGRATION ---
-  try {
-    console.log(`[Claude API] Enviando lead ${lead.name} para análise e qualificação do Claude...`);
-
-    const prompt = `Você é a inteligência artificial da Pet Hub, uma plataforma SaaS de automação de marketing e CRM para empresas pet (clínicas veterinárias, pet shops, banho e tosa, creches, adestradores).
+      const prompt = `Você é a inteligência artificial da Pet Hub, uma plataforma SaaS de automação de marketing e CRM para empresas pet (clínicas veterinárias, pet shops, banho e tosa, creches, adestradores).
 Seu objetivo é analisar as informações do seguinte lead e retornar:
 1. Uma qualificação crítica de 0 a 10 de quão atraente este lead é para contratar a Pet Hub.
 2. Uma análise sucinta de dor/oportunidade do negócio em português de até 3 frases.
@@ -487,67 +670,98 @@ FORMATO DA SUA RESPOSTA:
 Sua resposta deve ser estruturada EXATAMENTE em formato JSON puro, sem blocos de código markdown (\`\`\`json ... \`\`\`), apenas o objeto JSON com as chaves "score" (inteiro de 0 a 10), "claude_analysis" (string com a análise em português) e "suggested_message" (string com a mensagem de cold approach em português).
 Não adicione qualquer texto introdutório ou conclusivo.`;
 
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': claudeKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1200,
-        messages: [
-          { role: 'user', content: prompt }
-        ]
-      })
-    });
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': claudeKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1200,
+          messages: [
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
 
-    if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      throw new Error(`Erro ao chamar a API do Claude: ${errText}`);
-    }
-
-    const claudeData = await claudeRes.json();
-    const rawContent = claudeData.content[0].text;
-    console.log('[Claude API] Resposta bruta recebida:', rawContent);
-
-    // Parse JSON safely
-    let parsedResult;
-    try {
-      // In case Claude returns markdown block, strip it
-      let jsonString = rawContent;
-      if (jsonString.includes('```json')) {
-        jsonString = jsonString.split('```json')[1].split('```')[0].trim();
-      } else if (jsonString.includes('```')) {
-        jsonString = jsonString.split('```')[1].split('```')[0].trim();
+      if (!claudeRes.ok) {
+        const errText = await claudeRes.text();
+        throw new Error(`Erro na API do Claude: ${errText}`);
       }
-      parsedResult = JSON.parse(jsonString.trim());
-    } catch (e) {
-      console.warn('[Claude API] Falha ao analisar JSON da resposta, tentando fallback regex...', e);
-      // Heuristic extraction as backup
-      const scoreMatch = rawContent.match(/"score":\s*(\d+)/);
-      const analysisMatch = rawContent.match(/"claude_analysis":\s*"([^"]+)"/);
-      const messageMatch = rawContent.match(/"suggested_message":\s*"([^"]+)"/);
+
+      const claudeData = await claudeRes.json();
+      const rawContent = claudeData.content[0].text;
       
-      parsedResult = {
-        score: scoreMatch ? parseInt(scoreMatch[1]) : 7,
-        claude_analysis: analysisMatch ? analysisMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação automática da análise do Claude.',
-        suggested_message: messageMatch ? messageMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação automática da mensagem de abordagem.'
+      let parsedResult;
+      try {
+        let jsonString = rawContent;
+        if (jsonString.includes('```json')) {
+          jsonString = jsonString.split('```json')[1].split('```')[0].trim();
+        } else if (jsonString.includes('```')) {
+          jsonString = jsonString.split('```')[1].split('```')[0].trim();
+        }
+        parsedResult = JSON.parse(jsonString.trim());
+      } catch (e) {
+        const scoreMatch = rawContent.match(/"score":\s*(\d+)/);
+        const analysisMatch = rawContent.match(/"claude_analysis":\s*"([^"]+)"/);
+        const messageMatch = rawContent.match(/"suggested_message":\s*"([^"]+)"/);
+        
+        parsedResult = {
+          score: scoreMatch ? parseInt(scoreMatch[1]) : 7,
+          claude_analysis: analysisMatch ? analysisMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da análise.',
+          suggested_message: messageMatch ? messageMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da abordagem.'
+        };
+      }
+
+      qualifiedFields = {
+        score: parsedResult.score || 7,
+        claude_analysis: parsedResult.claude_analysis || 'Qualificação realizada.',
+        suggested_message: parsedResult.suggested_message || 'Abordagem configurada.',
+        status: 'Qualificado',
+        updatedAt: new Date().toISOString()
       };
+
+    } catch (e) {
+      console.error('[Claude API Error]', e);
+      return res.status(500).json({ error: `Erro na API do Claude: ${e.message}` });
     }
+  }
 
-    lead.score = parsedResult.score || 7;
-    lead.claude_analysis = parsedResult.claude_analysis || 'Lead qualificado com sucesso.';
-    lead.suggested_message = parsedResult.suggested_message || 'Mensagem de abordagem criada.';
-    lead.status = 'Qualificado';
+  // Update in Database or local cache
+  try {
+    if (supabase) {
+      console.log(`[Supabase] Salvando qualificação do lead ${leadId} em nuvem...`);
+      const { data, error } = await supabase
+        .from('leads')
+        .update({
+          score: qualifiedFields.score,
+          claude_analysis: qualifiedFields.claude_analysis,
+          suggested_message: qualifiedFields.suggested_message,
+          status: qualifiedFields.status,
+          updated_at: qualifiedFields.updatedAt
+        })
+        .eq('id', leadId)
+        .select();
 
-    await writeLeads(leads);
-    res.json(lead);
-
-  } catch (error) {
-    console.error('[Claude API Error]', error);
-    res.status(500).json({ error: `Erro na integração com a API do Claude: ${error.message}` });
+      if (error) throw error;
+      
+      res.json({
+        ...data[0],
+        updatedAt: data[0].updated_at
+      });
+    } else {
+      leads[idx] = {
+        ...lead,
+        ...qualifiedFields
+      };
+      await writeLocalLeads(leads);
+      res.json(leads[idx]);
+    }
+  } catch (dbErr) {
+    console.error('[Qualify Save Error]', dbErr);
+    res.status(500).json({ error: `Erro ao salvar qualificação no banco: ${dbErr.message}` });
   }
 });
 
@@ -556,6 +770,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Port listener
 app.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🐾 Pet Hub - Leads rodando com sucesso na porta ${PORT}!`);

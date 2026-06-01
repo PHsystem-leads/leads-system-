@@ -293,6 +293,11 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
         Apify: Carregando...
       </div>
       <div class="header-divider"></div>
+      <div class="header-ai" id="header-badge-supabase" style="color:var(--text-3)">
+        <div class="ai-dot" id="dot-supabase" style="background:var(--red)"></div>
+        Supabase: Carregando...
+      </div>
+      <div class="header-divider"></div>
       <div style="font-size:12.5px;color:var(--text-2);font-weight:600">Membro Pet Hub</div>
       <div class="avatar">PH</div>
     </div>
@@ -641,6 +646,14 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
               </div>
               <span class="badge br" id="config-status-apify">Desconectado</span>
             </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <strong>Supabase Cloud DB</strong>
+                <div style="font-size:11.5px; color:var(--text-3)">Banco de dados relacional PostgreSQL para armazenar os leads em nuvem.</div>
+              </div>
+              <span class="badge br" id="config-status-supabase">Desconectado</span>
+            </div>
           </div>
 
           <h2>Como Configurar suas Credenciais</h2>
@@ -900,9 +913,12 @@ function updateStatusBadges() {
   const badgeClaude = document.getElementById('header-badge-claude');
   const dotApify = document.getElementById('dot-apify');
   const badgeApify = document.getElementById('header-badge-apify');
+  const dotSupabase = document.getElementById('dot-supabase');
+  const badgeSupabase = document.getElementById('header-badge-supabase');
 
   const configClaude = document.getElementById('config-status-claude');
   const configApify = document.getElementById('config-status-apify');
+  const configSupabase = document.getElementById('config-status-supabase');
 
   // Claude Status
   if (apiStatus.claude) {
@@ -939,6 +955,29 @@ function updateStatusBadges() {
     if (configApify) {
       configApify.className = 'badge br';
       configApify.textContent = 'Modo Simulação';
+    }
+  }
+
+  // Supabase Status
+  if (apiStatus.supabase) {
+    if (dotSupabase) dotSupabase.style.background = '#16A34A';
+    if (badgeSupabase) {
+      badgeSupabase.style.color = 'var(--green)';
+      badgeSupabase.innerHTML = '<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>Supabase: Ativo';
+    }
+    if (configSupabase) {
+      configSupabase.className = 'badge bg';
+      configSupabase.textContent = 'Conectado';
+    }
+  } else {
+    if (dotSupabase) dotSupabase.style.background = '#DC2626';
+    if (badgeSupabase) {
+      badgeSupabase.style.color = 'var(--red)';
+      badgeSupabase.innerHTML = '<div class="ai-dot" style="background:#DC2626; box-shadow:0 0 6px #DC2626"></div>Supabase: Local';
+    }
+    if (configSupabase) {
+      configSupabase.className = 'badge br';
+      configSupabase.textContent = 'Local (leads.json)';
     }
   }
 
