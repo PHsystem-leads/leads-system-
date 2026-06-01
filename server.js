@@ -415,7 +415,7 @@ app.post('/api/leads/search', async (req, res) => {
       input = {
         searchQueries,
         maxCrawledPlacesPerSearch: limit,
-        language: 'pt',
+        language: 'pt-BR',
         exportPlaceUrls: false,
         includeReviews: false
       };
