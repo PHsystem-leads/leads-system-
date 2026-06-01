@@ -92,6 +92,8 @@ app.get('/api/status', (req, res) => {
   res.json({
     apify: !!process.env.APIFY_API_KEY,
     claude: !!process.env.CLAUDE_API_KEY,
+    openrouter: !!process.env.OPENROUTER_API_KEY,
+    openrouterModel: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat',
     supabase: !!supabase,
     port: PORT
   });
@@ -606,10 +608,12 @@ app.post('/api/leads/qualify', async (req, res) => {
 
   const lead = leads[idx];
   const claudeKey = process.env.CLAUDE_API_KEY;
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const openrouterModel = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
 
   let qualifiedFields = {};
 
-  if (!claudeKey) {
+  if (!claudeKey && !openrouterKey) {
     // --- SIMULATION MODE ---
     console.log(`[Claude Simulator] Qualificando lead pet: ${lead.name}...`);
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -643,6 +647,91 @@ app.post('/api/leads/qualify', async (req, res) => {
       status: 'Qualificado',
       updatedAt: new Date().toISOString()
     };
+  } else if (openrouterKey) {
+    // --- REAL OPENROUTER INTEGRATION ---
+    try {
+      console.log(`[OpenRouter API] Qualificando lead pet ${lead.name} via ${openrouterModel}...`);
+
+      const prompt = `Você é a inteligência artificial da Pet Hub, uma plataforma SaaS de automação de marketing e CRM para empresas pet (clínicas veterinárias, pet shops, banho e tosa, creches, adestradores).
+Seu objetivo é analisar as informações do seguinte lead e retornar:
+1. Uma qualificação crítica de 0 a 10 de quão atraente este lead é para contratar a Pet Hub.
+2. Uma análise sucinta de dor/oportunidade do negócio em português de até 3 frases.
+3. Um script de mensagem de primeira abordagem (cold approach) no WhatsApp/Instagram em português extremamente personalizada, persuasiva, amigável e profissional. Use o nome do estabelecimento e os dados fornecidos (como número de avaliações, seguidores, bio, ou localização) para soar autêntico e natural. A mensagem deve focar em propor uma demonstração de 10 minutos ou teste gratuito, destacando uma funcionalidade chave que resolva o problema do segmento dele (Ex: lembrete de vacinas para clínicas; clube de assinatura recorrente para banho e tosa; recorrência de pacotes e reserva de hotel para creches; alerta de recompra automática de ração para pet shops de bairro).
+
+DADOS DO LEAD PET:
+- Nome do Estabelecimento: "${lead.name}"
+- Plataforma de Origem: "${lead.platform}"
+- Segmento Pet: "${lead.segment}"
+- Instagram Handle / Localização: "${lead.handle}"
+- Seguidores Instagram: ${lead.followers || 'Não informado'}
+- Média Avaliação Google Maps: ${lead.rating || 'Não informado'}
+- Número Avaliações Google Maps: ${lead.reviews || 'Não informado'}
+- Telefone de Contato: "${lead.phone || 'Não informado'}"
+- E-mail: "${lead.email || 'Não informado'}"
+- Endereço / Cidade: "${lead.address || 'Não informado'}"
+- Biografia / Descrição: "${lead.bio || 'Não informado'}"
+
+FORMATO DA SUA RESPOSTA:
+Sua resposta deve ser estruturada EXATAMENTE em formato JSON puro, sem blocos de código markdown (\`\`\`json ... \`\`\`), apenas o objeto JSON com as chaves "score" (inteiro de 0 a 10), "claude_analysis" (string com a análise em português) e "suggested_message" (string com a mensagem de cold approach em português).
+Não adicione qualquer texto introdutório ou conclusivo.`;
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openrouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://pethub-leads.vercel.app',
+          'X-Title': 'Pet Hub Leads CRM'
+        },
+        body: JSON.stringify({
+          model: openrouterModel,
+          messages: [
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Erro na API do OpenRouter: ${errText}`);
+      }
+
+      const openrouterData = await response.json();
+      const rawContent = openrouterData.choices[0].message.content;
+      
+      let parsedResult;
+      try {
+        let jsonString = rawContent;
+        if (jsonString.includes('```json')) {
+          jsonString = jsonString.split('```json')[1].split('```')[0].trim();
+        } else if (jsonString.includes('```')) {
+          jsonString = jsonString.split('```')[1].split('```')[0].trim();
+        }
+        parsedResult = JSON.parse(jsonString.trim());
+      } catch (e) {
+        const scoreMatch = rawContent.match(/"score":\s*(\d+)/);
+        const analysisMatch = rawContent.match(/"claude_analysis":\s*"([^"]+)"/) || rawContent.match(/"analysis":\s*"([^"]+)"/);
+        const messageMatch = rawContent.match(/"suggested_message":\s*"([^"]+)"/) || rawContent.match(/"message":\s*"([^"]+)"/);
+        
+        parsedResult = {
+          score: scoreMatch ? parseInt(scoreMatch[1]) : 7,
+          claude_analysis: analysisMatch ? analysisMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da análise.',
+          suggested_message: messageMatch ? messageMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da abordagem.'
+        };
+      }
+
+      qualifiedFields = {
+        score: parsedResult.score || parsedResult.score === 0 ? parsedResult.score : 7,
+        claude_analysis: parsedResult.claude_analysis || parsedResult.analysis || 'Qualificação realizada via OpenRouter.',
+        suggested_message: parsedResult.suggested_message || parsedResult.message || 'Abordagem configurada via OpenRouter.',
+        status: 'Qualificado',
+        updatedAt: new Date().toISOString()
+      };
+
+    } catch (e) {
+      console.error('[OpenRouter API Error]', e);
+      return res.status(500).json({ error: `Erro na API do OpenRouter: ${e.message}` });
+    }
   } else {
     // --- REAL CLAUDE INTEGRATION ---
     try {

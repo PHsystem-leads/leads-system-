@@ -634,9 +634,17 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
             <div style="display:flex; justify-content:space-between; align-items:center">
               <div>
                 <strong>Anthropic Claude API</strong>
-                <div style="font-size:11.5px; color:var(--text-3)">Responsável por qualificar os leads e criar abordagens.</div>
+                <div style="font-size:11.5px; color:var(--text-3)">Responsável por qualificar os leads e criar abordagens nativas.</div>
               </div>
               <span class="badge br" id="config-status-claude">Desconectado</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <strong>OpenRouter API (Alternativa)</strong>
+                <div style="font-size:11.5px; color:var(--text-3)">Permite qualificar com qualquer modelo (DeepSeek, Llama, Gemini, etc.).</div>
+              </div>
+              <span class="badge br" id="config-status-openrouter">Desconectado</span>
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center">
@@ -662,12 +670,13 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
             <p style="margin-bottom:10px">Para ativar as buscas reais e qualificação automática real por IA:</p>
             <ol style="margin-left:20px; margin-bottom:12px; display:flex; flex-direction:column; gap:6px">
               <li>Abra o arquivo <strong style="font-family:monospace">.env</strong> localizado na sua área de trabalho.</li>
-              <li>Insira sua chave obtida no console da Anthropic na variável <strong style="font-family:monospace">CLAUDE_API_KEY</strong>.</li>
+              <li>Para usar a **OpenRouter** (Recomendado): Insira sua chave em <strong style="font-family:monospace">OPENROUTER_API_KEY</strong> e defina o modelo em <strong style="font-family:monospace">OPENROUTER_MODEL</strong> (ex: <code style="background:rgba(255,255,255,0.06);padding:2px 4px;border-radius:3px">deepseek/deepseek-chat</code>).</li>
+              <li>Para usar a **Anthropic Claude**: Insira sua chave na variável <strong style="font-family:monospace">CLAUDE_API_KEY</strong>.</li>
               <li>Insira seu token de API da Apify na variável <strong style="font-family:monospace">APIFY_API_KEY</strong>.</li>
               <li>Reinicie o servidor local para carregar as novas chaves.</li>
             </ol>
             <div class="info-box" style="margin-bottom:0">
-              <strong>Nota:</strong> Enquanto as chaves estiverem vazias, o sistema executará no <strong>Modo Simulação</strong>. Isso permite que você digite qualquer busca e receba leads pet simulados ultra-realistas com notas de qualificação dinâmicas geradas localmente.
+              <strong>Nota:</strong> Enquanto as chaves de IA (Claude e OpenRouter) estiverem vazias, o sistema executará no <strong>Modo Simulação</strong>. Isso permite que você receba leads pet simulados ultra-realistas com notas de qualificação dinâmicas geradas localmente.
             </div>
           </div>
         </div>
@@ -917,25 +926,46 @@ function updateStatusBadges() {
   const badgeSupabase = document.getElementById('header-badge-supabase');
 
   const configClaude = document.getElementById('config-status-claude');
+  const configOpenRouter = document.getElementById('config-status-openrouter');
   const configApify = document.getElementById('config-status-apify');
   const configSupabase = document.getElementById('config-status-supabase');
 
-  // Claude Status
-  if (apiStatus.claude) {
+  // OpenRouter Status Check & Render
+  if (apiStatus.openrouter) {
     dotClaude.style.background = '#16A34A';
     badgeClaude.style.color = 'var(--green)';
-    badgeClaude.innerHTML = '<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>Claude: Ativo';
+    badgeClaude.innerHTML = `<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>OpenRouter: Ativo`;
+    if (configOpenRouter) {
+      configOpenRouter.className = 'badge bg';
+      configOpenRouter.textContent = `Ativo (${apiStatus.openrouterModel.split('/').pop()})`;
+    }
+  } else {
+    if (configOpenRouter) {
+      configOpenRouter.className = 'badge br';
+      configOpenRouter.textContent = 'Desconectado';
+    }
+  }
+
+  // Claude Status
+  if (apiStatus.claude) {
+    if (!apiStatus.openrouter) {
+      dotClaude.style.background = '#16A34A';
+      badgeClaude.style.color = 'var(--green)';
+      badgeClaude.innerHTML = '<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>Claude: Ativo';
+    }
     if (configClaude) {
       configClaude.className = 'badge bg';
       configClaude.textContent = 'Conectado';
     }
   } else {
-    dotClaude.style.background = '#DC2626';
-    badgeClaude.style.color = 'var(--red)';
-    badgeClaude.innerHTML = '<div class="ai-dot" style="background:#DC2626; box-shadow:0 0 6px #DC2626"></div>Claude: Simulado';
     if (configClaude) {
       configClaude.className = 'badge br';
-      configClaude.textContent = 'Modo Simulação';
+      configClaude.textContent = 'Desconectado';
+    }
+    if (!apiStatus.openrouter) {
+      dotClaude.style.background = '#DC2626';
+      badgeClaude.style.color = 'var(--red)';
+      badgeClaude.innerHTML = '<div class="ai-dot" style="background:#DC2626; box-shadow:0 0 6px #DC2626"></div>IA: Simulado';
     }
   }
 
@@ -984,12 +1014,16 @@ function updateStatusBadges() {
   // Info Box text in Captação IA
   const infoBox = document.getElementById('info-connection-status');
   if (infoBox) {
-    if (apiStatus.apify && apiStatus.claude) {
+    if (apiStatus.apify && (apiStatus.claude || apiStatus.openrouter)) {
       infoBox.className = 'info-box';
       infoBox.style.background = 'var(--purple-bg)';
       infoBox.style.color = '#C8A4F4';
       infoBox.style.borderColor = 'var(--purple-border)';
-      infoBox.innerHTML = '<strong>Apify e Claude Ativos!</strong> As buscas rasparão dados reais públicos do Google Maps e Instagram e qualificarão automaticamente com a IA da Anthropic.';
+      
+      const activeIaName = apiStatus.openrouter 
+        ? `OpenRouter (Modelo: ${apiStatus.openrouterModel.split('/').pop()})`
+        : 'Anthropic Claude';
+      infoBox.innerHTML = `<strong>Apify e ${activeIaName} Ativos!</strong> As buscas rasparão dados reais públicos do Google Maps e Instagram e qualificarão automaticamente com a inteligência artificial.`;
     } else {
       infoBox.className = 'info-box';
       infoBox.style.background = 'var(--amber-bg)';
@@ -1468,8 +1502,8 @@ function renderLeadModalClaudeSection() {
       <div class="ai-block not-qualified">
         <div style="font-size:24px; margin-bottom:8px">🧠</div>
         <div style="font-weight:600; margin-bottom:4px; color:var(--text)">Lead ainda não qualificado</div>
-        <div style="font-size:12px; color:var(--text-3); margin-bottom:14px; line-height:1.4">Use o poder do Claude para analisar este perfil pet e criar um script de abordagem personalizada via WhatsApp ou Direct.</div>
-        <button class="btn btn-dark" style="margin:0 auto" onclick="triggerClaudeQualification()">Qualificar com Claude IA</button>
+        <div style="font-size:12px; color:var(--text-3); margin-bottom:14px; line-height:1.4">Use o poder da Inteligência Artificial para analisar este perfil pet e criar um script de abordagem personalizada via WhatsApp ou Direct.</div>
+        <button class="btn btn-dark" style="margin:0 auto" onclick="triggerClaudeQualification()">Qualificar com IA</button>
       </div>
     `;
   } else {
