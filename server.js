@@ -1228,6 +1228,51 @@ app.post('/api/leads/generate-message', async (req, res) => {
   }
 });
 
+// GET /api/whatsapp/qr — Retorna QR code da instância Evolution para conexão
+app.get('/api/whatsapp/qr', async (req, res) => {
+  if (!evolutionBaseUrl || !evolutionApiKey) {
+    return res.status(503).json({ error: 'Evolution API não configurada.' });
+  }
+  try {
+    const r = await fetch(`${evolutionBaseUrl}/instance/connect/${evolutionInstance}`, {
+      headers: { 'apikey': evolutionApiKey }
+    });
+    const data = await r.json();
+
+    // Já conectado
+    if (data.instance?.state === 'open' || data.state === 'open') {
+      return res.json({ status: 'connected', number: data.instance?.ownerJid || null });
+    }
+
+    // QR como base64 (Evolution v1)
+    if (data.base64) return res.json({ status: 'qr', qr: data.base64 });
+
+    // QR como code string (Evolution v2) — devolve o texto puro para o frontend renderizar
+    if (data.code) return res.json({ status: 'qr', code: data.code });
+
+    res.json({ status: data.instance?.state || 'unknown' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/whatsapp/status — Status da conexão WhatsApp
+app.get('/api/whatsapp/status', async (req, res) => {
+  if (!evolutionBaseUrl || !evolutionApiKey) {
+    return res.json({ connected: false, reason: 'não configurado' });
+  }
+  try {
+    const r = await fetch(`${evolutionBaseUrl}/instance/connectionState/${evolutionInstance}`, {
+      headers: { 'apikey': evolutionApiKey }
+    });
+    const data = await r.json();
+    const state = data.instance?.state || data.state || 'unknown';
+    res.json({ connected: state === 'open', state, number: data.instance?.ownerJid || null });
+  } catch (e) {
+    res.status(500).json({ connected: false, error: e.message });
+  }
+});
+
 // POST /api/whatsapp/analyze — Analisa conversa e retorna insights + move lead
 app.post('/api/whatsapp/analyze', async (req, res) => {
   const { phone } = req.body;

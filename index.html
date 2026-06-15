@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
@@ -763,6 +764,17 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
           </div>
           <button class="btn-xs" onclick="loadInbox()">Atualizar</button>
         </div>
+      </div>
+
+      <!-- QR Code panel — aparece quando WhatsApp não está conectado -->
+      <div id="wa-qr-panel" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rlg);padding:28px;margin-bottom:20px;text-align:center">
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Conectar WhatsApp</div>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:20px">Escaneie o QR Code com o WhatsApp do número dedicado a este sistema</div>
+        <div id="wa-qr-img-wrap" style="display:inline-block;padding:12px;background:#fff;border-radius:12px;margin-bottom:16px">
+          <canvas id="wa-qr-canvas" width="200" height="200"></canvas>
+        </div>
+        <div id="wa-qr-status" style="font-size:12px;color:var(--text-3);margin-bottom:12px">Gerando QR Code...</div>
+        <button class="btn-xs" onclick="loadQRCode()" style="margin:0 auto">Atualizar QR</button>
       </div>
 
       <div class="inbox-wrap">
@@ -2538,20 +2550,78 @@ async function initInbox() {
 }
 
 async function checkInboxWAStatus() {
-  const dot = document.getElementById('inbox-wa-dot');
-  const label = document.getElementById('inbox-wa-label');
+  const dot      = document.getElementById('inbox-wa-dot');
+  const label    = document.getElementById('inbox-wa-label');
+  const qrPanel  = document.getElementById('wa-qr-panel');
   try {
-    const res = await fetch('/api/whatsapp/status');
+    const res  = await fetch('/api/whatsapp/status');
     const data = await res.json();
     if (data.connected) {
-      if (dot) { dot.style.background = '#16A34A'; dot.style.boxShadow = '0 0 5px #16A34A'; dot.style.animation = 'pulse 2.4s ease-in-out infinite'; }
-      if (label) label.textContent = 'WhatsApp conectado';
+      if (dot)   { dot.style.background = '#16A34A'; dot.style.boxShadow = '0 0 5px #16A34A'; dot.style.animation = 'pulse 2.4s ease-in-out infinite'; }
+      const num = data.number ? ' · ' + data.number.replace('@s.whatsapp.net','').replace('55','') : '';
+      if (label) label.textContent = 'WhatsApp conectado' + num;
+      if (qrPanel) qrPanel.style.display = 'none';
     } else {
-      if (dot) { dot.style.background = '#DC2626'; dot.style.boxShadow = '0 0 5px #DC2626'; dot.style.animation = 'none'; }
+      if (dot)   { dot.style.background = '#DC2626'; dot.style.boxShadow = '0 0 5px #DC2626'; dot.style.animation = 'none'; }
       if (label) label.textContent = 'WhatsApp desconectado';
+      if (qrPanel) { qrPanel.style.display = 'block'; loadQRCode(); }
     }
   } catch {
-    if (label) label.textContent = 'Evolution API offline';
+    if (label)  label.textContent = 'Evolution API offline';
+    if (qrPanel) qrPanel.style.display = 'none';
+  }
+}
+
+let _qrPollTimer = null;
+
+async function loadQRCode() {
+  const canvas = document.getElementById('wa-qr-canvas');
+  const wrap   = document.getElementById('wa-qr-img-wrap');
+  const status = document.getElementById('wa-qr-status');
+  if (status) status.textContent = 'Carregando QR Code...';
+  try {
+    const res  = await fetch('/api/whatsapp/qr');
+    const data = await res.json();
+
+    if (data.status === 'connected') {
+      if (wrap)   wrap.style.display = 'none';
+      if (status) status.textContent = 'WhatsApp conectado!';
+      setTimeout(checkInboxWAStatus, 800);
+      return;
+    }
+
+    // Renderiza QR code no canvas usando qrcode.js
+    const qrText = data.code || data.qr;
+    if (qrText && canvas) {
+      // Se for base64 (v1), exibe como imagem
+      if (qrText.startsWith('data:')) {
+        const img = new Image();
+        img.onload = () => {
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 200, 200);
+        };
+        img.src = qrText;
+      } else {
+        // Texto puro (v2) — gera QR via QRCode lib
+        QRCode.toCanvas(canvas, qrText, { width: 200, margin: 1, color: { dark: '#000', light: '#fff' } });
+      }
+      if (wrap)   wrap.style.display = 'inline-block';
+      if (status) status.textContent = 'Abra o WhatsApp → Dispositivos conectados → Conectar dispositivo';
+
+      // Verifica conexão a cada 4s automaticamente
+      if (_qrPollTimer) clearInterval(_qrPollTimer);
+      _qrPollTimer = setInterval(async () => {
+        const r = await fetch('/api/whatsapp/status').then(r => r.json()).catch(() => ({}));
+        if (r.connected) {
+          clearInterval(_qrPollTimer);
+          checkInboxWAStatus();
+        }
+      }, 4000);
+    } else {
+      if (status) status.textContent = data.error || 'QR indisponivel. Clique em Atualizar QR.';
+    }
+  } catch (e) {
+    if (status) status.textContent = 'Erro: ' + e.message;
   }
 }
 
