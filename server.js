@@ -6,6 +6,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+let _ws; try { _ws = _require('ws'); } catch (_) { _ws = undefined; }
 import { qualifyLead, generateApproachMessage, analyzeConversation, generateFollowUp, suggestNextAction } from './services/ai/leadAnalyzer.js';
 import { getAIStats, hasAIKeys } from './services/ai/openrouter.js';
 
@@ -31,7 +34,8 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC
 let supabase = null;
 if (supabaseUrl && supabaseAnonKey) {
   console.log('[Supabase] Credenciais detectadas. Inicializando cliente...');
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabaseOpts = _ws ? { realtime: { transport: _ws } } : {};
+  supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseOpts);
 } else {
   console.log('[Supabase] Sem credenciais no .env. Utilizando leads.json local para persistência.');
 }
@@ -263,6 +267,16 @@ async function saveMessage(msg) {
 // Webhook: receives incoming messages from Evolution API
 app.post('/api/whatsapp/webhook', async (req, res) => {
   try {
+    // Valida token de segurança se configurado
+    const webhookToken = process.env.EVOLUTION_WEBHOOK_TOKEN;
+    if (webhookToken) {
+      const incoming = req.headers['apikey'] || req.headers['authorization']?.replace('Bearer ', '') || req.query.token;
+      if (incoming !== webhookToken) {
+        console.warn('[Webhook] Token inválido recebido:', incoming?.slice(0, 8) + '...');
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
     const body = req.body;
     const event = body.event;
 
