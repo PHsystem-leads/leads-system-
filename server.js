@@ -200,6 +200,137 @@ app.post('/api/whatsapp/test', async (req, res) => {
   }
 });
 
+// --- WHATSAPP INBOX: MESSAGE STORAGE ---
+const MESSAGES_FILE = path.join(__dirname, 'messages.json');
+
+async function readMessages() {
+  try {
+    const data = await fs.readFile(MESSAGES_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
+async function writeMessages(messages) {
+  await fs.writeFile(MESSAGES_FILE, JSON.stringify(messages, null, 2), 'utf-8');
+}
+
+async function saveMessage(msg) {
+  const messages = await readMessages();
+  messages.unshift(msg);
+  await writeMessages(messages);
+  return msg;
+}
+
+// Webhook: receives incoming messages from Evolution API
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  try {
+    const body = req.body;
+    const event = body.event;
+
+    if (event !== 'messages.upsert') return res.json({ ok: true });
+
+    const msgData = body.data;
+    if (!msgData) return res.json({ ok: true });
+
+    const fromMe = msgData.key?.fromMe || false;
+    if (fromMe) return res.json({ ok: true });
+
+    const remoteJid = msgData.key?.remoteJid || '';
+    if (remoteJid.endsWith('@g.us')) return res.json({ ok: true }); // ignore groups
+
+    const phone = remoteJid.replace('@s.whatsapp.net', '');
+    const pushName = msgData.pushName || phone;
+    const content = msgData.message?.conversation
+      || msgData.message?.extendedTextMessage?.text
+      || msgData.message?.imageMessage?.caption
+      || '[M\u00EDdia recebida]';
+    const timestamp = msgData.messageTimestamp
+      ? new Date(msgData.messageTimestamp * 1000).toISOString()
+      : new Date().toISOString();
+
+    const msg = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      phone,
+      name: pushName,
+      direction: 'in',
+      content,
+      timestamp
+    };
+
+    await saveMessage(msg);
+    console.log(`[WhatsApp Inbox] Recebido de ${pushName} (${phone}): ${content.slice(0, 60)}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Webhook Error]', e.message);
+    res.json({ ok: true });
+  }
+});
+
+// List conversations grouped by phone (last message per contact)
+app.get('/api/whatsapp/conversations', async (req, res) => {
+  const [messages, leads] = await Promise.all([readMessages(), readLeads()]);
+
+  const byPhone = {};
+  for (const m of messages) {
+    if (!byPhone[m.phone]) {
+      byPhone[m.phone] = { phone: m.phone, name: m.name, messages: [] };
+    }
+    byPhone[m.phone].messages.push(m);
+  }
+
+  const conversations = Object.values(byPhone).map(c => {
+    const sorted = [...c.messages].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const lead = leads.find(l => sanitizePhone(l.phone) === sanitizePhone(c.phone));
+    const unread = c.messages.filter(m => m.direction === 'in').length;
+    return {
+      phone: c.phone,
+      name: lead?.name || c.name,
+      segment: lead?.segment || null,
+      status: lead?.status || null,
+      leadId: lead?.id || null,
+      lastMessage: sorted[0]?.content || '',
+      lastAt: sorted[0]?.timestamp || '',
+      unread
+    };
+  }).sort((a, b) => new Date(b.lastAt) - new Date(a.lastAt));
+
+  res.json(conversations);
+});
+
+// Get all messages for a specific phone number
+app.get('/api/whatsapp/conversations/:phone', async (req, res) => {
+  const messages = await readMessages();
+  const phone = req.params.phone;
+  const conv = messages
+    .filter(m => m.phone === phone)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  res.json(conv);
+});
+
+// Send reply from the inbox
+app.post('/api/whatsapp/reply', async (req, res) => {
+  const { phone, message } = req.body;
+  if (!phone || !message) return res.status(400).json({ error: 'phone e message s\u00E3o obrigat\u00F3rios.' });
+
+  try {
+    const result = await sendWhatsAppMessage(phone, message);
+    const msg = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      phone,
+      name: 'Pet Hub',
+      direction: 'out',
+      content: message,
+      timestamp: new Date().toISOString()
+    };
+    await saveMessage(msg);
+    res.json({ success: true, result, msg });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- CRM REST ENDPOINTS ---
 
 // Fetch all leads
