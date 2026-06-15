@@ -253,6 +253,41 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
 .copy-btn{position:absolute;top:6px;right:6px;font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--border-2);background:#0e0d21;color:var(--text);cursor:pointer;transition:background 0.15s}
 .copy-btn:hover{background:var(--purple)}
 
+/* ── AI INTELLIGENCE MODULE STYLES ── */
+.temp-badge{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;padding:1px 7px;border-radius:99px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.temp-quente{background:rgba(239,68,68,0.15);color:#F87171;border:1px solid rgba(239,68,68,0.3)}
+.temp-morno{background:rgba(245,158,11,0.15);color:#FBBF24;border:1px solid rgba(245,158,11,0.3)}
+.temp-frio{background:rgba(96,165,250,0.15);color:#93C5FD;border:1px solid rgba(96,165,250,0.3)}
+.ai-score-bar{height:5px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden;margin:4px 0 2px}
+.ai-score-fill{height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.ai-score-fill.hot{background:linear-gradient(90deg,#F87171,#EF4444);box-shadow:0 0 6px rgba(239,68,68,.5)}
+.ai-score-fill.warm{background:linear-gradient(90deg,#FBBF24,#F59E0B);box-shadow:0 0 6px rgba(245,158,11,.5)}
+.ai-score-fill.cold{background:linear-gradient(90deg,#60A5FA,#3B82F6);box-shadow:0 0 6px rgba(59,130,246,.5)}
+.ai-score-fill.purple{background:linear-gradient(90deg,#A78BFA,#7C3AED);box-shadow:0 0 6px rgba(124,58,237,.4)}
+.ai-action-box{display:flex;align-items:flex-start;gap:10px;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:var(--r);padding:10px 13px;font-size:12.5px;color:#C8A4F4;line-height:1.5}
+.ai-action-icon{width:26px;height:26px;background:rgba(91,46,136,0.4);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+.ai-insights-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.ai-insight-chip{background:rgba(8,7,26,0.5);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11.5px}
+.ai-insight-label{color:var(--text-3);font-size:10px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px}
+.ai-insight-val{color:var(--text);font-weight:600}
+.ai-insight-val.green{color:var(--green)}.ai-insight-val.amber{color:var(--amber)}.ai-insight-val.red{color:var(--red)}.ai-insight-val.blue{color:#60A5FA}
+.conv-analysis-panel{padding:8px 16px 6px;background:rgba(8,7,26,0.5);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:34px}
+.conv-chip{padding:2px 9px;border-radius:99px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.conv-chip.pos{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.conv-chip.neu{background:rgba(255,255,255,0.06);color:var(--text-2);border:1px solid var(--border)}
+.conv-chip.neg{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.conv-chip.amb{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.conv-chip.pur{background:var(--purple-bg);color:#C8A4F4;border:1px solid var(--purple-border)}
+.conv-action-tip{font-size:11px;color:var(--text-3);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.btn-analyze{font-size:10.5px;padding:2px 9px;border-radius:5px;border:1px solid var(--purple-border);background:var(--purple-bg);color:#C8A4F4;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s;white-space:nowrap}
+.btn-analyze:hover{background:var(--purple);color:#FDFCF9}
+.ai-metric-strip{display:flex;background:var(--bg-card);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.25)}
+.ai-metric{flex:1;padding:12px 16px;border-right:1px solid var(--border)}
+.ai-metric:last-child{border-right:none}
+.ai-metric-l{font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:600}
+.ai-metric-v{font-family:'DM Mono',monospace;font-size:16px;font-weight:400}
+.ai-metric-d{font-size:10.5px;margin-top:2px;color:var(--text-3)}
+
 /* qualifying lead card pulse animation */
 .lead-card.qualifying {
   border-color: var(--purple) !important;
@@ -382,6 +417,40 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
           <div class="stat-l">Leads Convertidos</div>
           <div class="stat-v" id="stat-converted-leads">0</div>
           <div class="stat-d up" style="color:var(--green)">Sucesso de captação</div>
+        </div>
+      </div>
+
+      <!-- IA Dashboard Metrics -->
+      <div class="ai-metric-strip" id="ai-metric-strip">
+        <div class="ai-metric">
+          <div class="ai-metric-l">Leads Analisados</div>
+          <div class="ai-metric-v" id="ai-stat-analyzed">—</div>
+          <div class="ai-metric-d">por IA</div>
+        </div>
+        <div class="ai-metric">
+          <div class="ai-metric-l">Leads Quentes</div>
+          <div class="ai-metric-v" style="color:#F87171" id="ai-stat-quentes">—</div>
+          <div class="ai-metric-d">score &ge; 70</div>
+        </div>
+        <div class="ai-metric">
+          <div class="ai-metric-l">Leads Mornos</div>
+          <div class="ai-metric-v" style="color:#FBBF24" id="ai-stat-mornos">—</div>
+          <div class="ai-metric-d">score 40–69</div>
+        </div>
+        <div class="ai-metric">
+          <div class="ai-metric-l">Leads Frios</div>
+          <div class="ai-metric-v" style="color:#93C5FD" id="ai-stat-frios">—</div>
+          <div class="ai-metric-d">score &lt; 40</div>
+        </div>
+        <div class="ai-metric">
+          <div class="ai-metric-l">Convertidos por IA</div>
+          <div class="ai-metric-v" style="color:var(--green)" id="ai-stat-converted">—</div>
+          <div class="ai-metric-d">total</div>
+        </div>
+        <div class="ai-metric">
+          <div class="ai-metric-l">Follow-ups Enviados</div>
+          <div class="ai-metric-v" style="color:#C8A4F4" id="ai-stat-followups">—</div>
+          <div class="ai-metric-d">reengajamentos</div>
         </div>
       </div>
 
@@ -728,8 +797,14 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
               </div>
               <div style="margin-left:auto;display:flex;gap:8px">
                 <button class="btn-xs" id="chat-open-lead-btn" onclick="openLeadFromInbox()" style="display:none">Ver lead no CRM</button>
+                <button class="btn-analyze" id="btn-analyze-conv" onclick="analyzeActiveConversation()">Analisar IA</button>
                 <button class="btn-xs" onclick="pasteAISuggestion()">Colar mensagem IA</button>
               </div>
+            </div>
+            <!-- Painel de análise de conversa pela IA -->
+            <div class="conv-analysis-panel" id="conv-analysis-panel" style="display:none">
+              <span id="conv-chips"></span>
+              <span class="conv-action-tip" id="conv-action-tip"></span>
             </div>
             <div class="chat-messages" id="chat-messages"></div>
             <div class="chat-input-bar">
@@ -1084,6 +1159,9 @@ function go(id, el) {
   if (id === 'whatsapp') {
     initInbox();
   }
+  if (id === 'painel') {
+    loadAIStats();
+  }
 }
 
 // --- INITIALIZE & FETCH ---
@@ -1095,6 +1173,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderDispatchHistory();
   countChars();
   startAutopilotTimer();
+  loadAIStats();
 });
 
 async function fetchStatus() {
@@ -1350,12 +1429,25 @@ function renderPipeline() {
         metaStr = `${lead.followers ? (lead.followers / 1000).toFixed(1) + 'k' : 'N/A'} seguidores · ${lead.segment}`;
       }
 
+      // Temperature badge
+      const tempIcon  = lead.ai_temperatura === 'quente' ? '▲' : lead.ai_temperatura === 'morno' ? '●' : lead.ai_temperatura === 'frio' ? '▼' : null;
+      const tempBadge = tempIcon ? `<span class="temp-badge temp-${lead.ai_temperatura}">${tempIcon} ${lead.ai_temperatura}</span>` : '';
+
+      // AI Score bar (0-100)
+      let scoreBarClass = 'purple';
+      if (lead.ai_temperatura === 'quente') scoreBarClass = 'hot';
+      else if (lead.ai_temperatura === 'morno') scoreBarClass = 'warm';
+      else if (lead.ai_temperatura === 'frio') scoreBarClass = 'cold';
+      const aiScorePct   = lead.ai_score != null ? lead.ai_score : (lead.score || 0) * 10;
+      const aiScoreBar   = `<div class="ai-score-bar"><div class="ai-score-fill ${scoreBarClass}" style="width:${aiScorePct}%"></div></div>`;
+
       card.innerHTML = `
         <div class="lead-handle">${lead.name}</div>
         <div class="lead-meta">${lead.handle}</div>
         <div class="lead-meta" style="color:var(--text-3)">${metaStr}</div>
         <div class="lead-preview">"${lead.bio ? lead.bio.slice(0, 50) + '...' : 'Sem biografia disponível.'}"</div>
-        <div class="score-row">Score <div class="dots">${dotsHtml}</div> ${lead.score}/10</div>
+        <div class="score-row">Score <div class="dots">${dotsHtml}</div> ${lead.score}/10 ${tempBadge}</div>
+        ${aiScoreBar}
       `;
 
       colElement.appendChild(card);
@@ -1716,7 +1808,7 @@ function renderLeadModalClaudeSection() {
   if (!isQualified && (!selectedLead.claude_analysis || selectedLead.claude_analysis.includes('Aguardando'))) {
     container.innerHTML = `
       <div class="ai-block not-qualified">
-        <div style="font-size:24px; margin-bottom:8px">🧠</div>
+        <div style="font-size:24px; margin-bottom:8px">&#x1F9E0;</div>
         <div style="font-weight:600; margin-bottom:4px; color:var(--text)">Lead ainda não qualificado</div>
         <div style="font-size:12px; color:var(--text-3); margin-bottom:14px; line-height:1.4">Use o poder da Inteligência Artificial para analisar este perfil pet e criar um script de abordagem personalizada via WhatsApp ou Direct.</div>
         <button class="btn btn-dark" style="margin:0 auto" onclick="triggerClaudeQualification()">Qualificar com IA</button>
@@ -1727,25 +1819,68 @@ function renderLeadModalClaudeSection() {
     let starsHtml = '';
     for (let i = 1; i <= 10; i++) {
       if (i <= selectedLead.score) {
-        starsHtml += '<span style="color:#C29C38; font-size:15px">★</span>';
+        starsHtml += '<span style="color:#C29C38; font-size:15px">&#x2605;</span>';
       } else {
-        starsHtml += '<span style="color:rgba(255,255,255,0.1); font-size:15px">☆</span>';
+        starsHtml += '<span style="color:rgba(255,255,255,0.1); font-size:15px">&#x2606;</span>';
       }
     }
 
+    // Temperatura badge
+    const _tempIcons = { quente: '&#x25B2;', morno: '&#x25CF;', frio: '&#x25BC;' };
+    const tempIcon     = _tempIcons[selectedLead.ai_temperatura] || null;
+    const tempBadgeHtml = selectedLead.ai_temperatura
+      ? `<span class="temp-badge temp-${selectedLead.ai_temperatura}" style="font-size:11px;padding:2px 7px">${tempIcon} ${selectedLead.ai_temperatura}</span>`
+      : '';
+
+    // AI Score bar (0-100)
+    const aiScorePct = selectedLead.ai_score != null ? selectedLead.ai_score : (selectedLead.score || 0) * 10;
+    const _barClass  = selectedLead.ai_temperatura === 'quente' ? 'hot' : selectedLead.ai_temperatura === 'morno' ? 'warm' : selectedLead.ai_temperatura === 'frio' ? 'cold' : 'purple';
+    const aiScoreBarHtml = `
+      <div style="margin-top:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--text-3)">Score IA</span>
+          <span style="font-size:11px;font-family:'DM Mono',monospace;color:#C8A4F4">${aiScorePct}/100</span>
+        </div>
+        <div class="ai-score-bar"><div class="ai-score-fill ${_barClass}" style="width:${aiScorePct}%"></div></div>
+      </div>`;
+
+    // Resumo + Motivo
+    const resumoHtml = selectedLead.ai_resumo
+      ? `<div style="font-size:12px;color:var(--text-2);margin-top:8px;line-height:1.5"><strong style="color:var(--text-3)">Resumo:</strong> ${selectedLead.ai_resumo}</div>`
+      : '';
+    const motivoHtml = selectedLead.ai_motivo
+      ? `<div style="font-size:12px;color:var(--text-2);margin-top:4px;line-height:1.5"><strong style="color:var(--text-3)">Motivo:</strong> ${selectedLead.ai_motivo}</div>`
+      : '';
+
+    // Próxima ação sugerida
+    const proximaAcaoHtml = selectedLead.proxima_acao
+      ? `<div class="ai-action-box" style="margin-top:12px">
+          <div class="ai-action-label">Próxima ação sugerida pela IA</div>
+          <div class="ai-action-text">${selectedLead.proxima_acao}</div>
+        </div>`
+      : '';
+
+    // "Gerar Primeira Mensagem" button
+    const generateMsgBtn = `<button class="btn" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#4a1e7a,#6b2fa0);color:#fff;font-size:12px;padding:8px 12px;border:none;cursor:pointer" onclick="generateFirstMessage(event)">&#x2728; Gerar Primeira Mensagem</button>`;
+
     container.innerHTML = `
       <div style="background:var(--purple-bg); border:1px solid var(--purple-border); padding:14px; border-radius:var(--r); margin-bottom:12px; box-shadow:0 0 10px rgba(91,46,136,0.15)">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
           <strong style="color:#C8A4F4; font-size:13.5px">Análise Inteligente (Pet Hub)</strong>
-          <div>${starsHtml} <strong style="font-family:'DM Mono',monospace; color:#C8A4F4; font-size:12.5px">${selectedLead.score}/10</strong></div>
+          <div style="display:flex;align-items:center;gap:6px">${tempBadgeHtml}<div>${starsHtml} <strong style="font-family:'DM Mono',monospace; color:#C8A4F4; font-size:12.5px">${selectedLead.score}/10</strong></div></div>
         </div>
-        <div style="font-size:12.5px; color:#C8A4F4; line-height:1.55">${selectedLead.claude_analysis}</div>
+        ${aiScoreBarHtml}
+        ${resumoHtml}
+        ${motivoHtml}
+        <div style="font-size:12.5px; color:#C8A4F4; line-height:1.55; margin-top:10px">${selectedLead.claude_analysis}</div>
+        ${proximaAcaoHtml}
       </div>
 
       <div class="modal-section-title" style="margin-top:14px">Script de Abordagem Personalizado</div>
-      <div class="copy-block" id="block-copy-text">${selectedLead.suggested_message}
+      <div class="copy-block" id="block-copy-text">${selectedLead.suggested_message || ''}
         <button class="copy-btn" onclick="copyApproachMessage()">Copiar</button>
       </div>
+      ${generateMsgBtn}
     `;
   }
 }
@@ -1779,6 +1914,95 @@ function copyApproachMessage() {
   }).catch(e => {
     alert('Erro ao copiar texto: ' + e);
   });
+}
+
+// --- GENERATE FIRST MESSAGE (AI) ---
+async function generateFirstMessage(event) {
+  if (!selectedLead) return;
+  const btn = event ? event.currentTarget : document.querySelector('[onclick*="generateFirstMessage"]');
+  if (!btn) return;
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Gerando mensagem...';
+  try {
+    const res = await fetch('/api/leads/generate-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId: selectedLead.id })
+    });
+    const data = await res.json();
+    if (res.ok && data.message) {
+      selectedLead.suggested_message = data.message;
+      const block = document.getElementById('block-copy-text');
+      if (block) {
+        block.innerHTML = data.message + '<button class="copy-btn" onclick="copyApproachMessage()">Copiar</button>';
+      }
+    } else {
+      alert(data.error || 'Erro ao gerar mensagem');
+    }
+  } catch (e) {
+    alert('Erro de rede: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  }
+}
+
+// --- ANALYZE ACTIVE CONVERSATION (AI) ---
+async function analyzeActiveConversation() {
+  if (!activeInboxPhone) return;
+  const btn = document.getElementById('btn-analyze-conv');
+  if (btn) { btn.disabled = true; btn.textContent = 'Analisando...'; }
+  try {
+    const res = await fetch('/api/whatsapp/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: activeInboxPhone })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const panel  = document.getElementById('conv-analysis-panel');
+      const chipsEl = document.getElementById('conv-chips');
+      const tipEl   = document.getElementById('conv-action-tip');
+      if (panel && chipsEl && tipEl) {
+        const chips = [];
+        if (data.sentimento)  chips.push(`<span class="conv-chip">${data.sentimento}</span>`);
+        if (data.interesse)   chips.push(`<span class="conv-chip">${data.interesse} interesse</span>`);
+        if (data.urgencia)    chips.push(`<span class="conv-chip">urgência ${data.urgencia}</span>`);
+        if (data.pedidoDemo)  chips.push(`<span class="conv-chip" style="background:#1e4d1e">&#x1F4CB; pediu demo</span>`);
+        if (data.pedidoPreco) chips.push(`<span class="conv-chip" style="background:#1a3a5c">&#x1F4B0; pediu preço</span>`);
+        if (data.objecao)     chips.push(`<span class="conv-chip" style="background:#4d1e1e">&#x26A0; ${data.objecao}</span>`);
+        chipsEl.innerHTML  = chips.join(' ');
+        tipEl.textContent  = data.proximaAcao || '';
+        panel.style.display = 'flex';
+      }
+    } else {
+      alert(data.error || 'Erro na análise');
+    }
+  } catch (e) {
+    alert('Erro de rede: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Analisar IA'; }
+  }
+}
+
+// --- AI STATS DASHBOARD ---
+async function loadAIStats() {
+  try {
+    const res = await fetch('/api/ai/stats');
+    if (!res.ok) return;
+    const data  = await res.json();
+    const leads = data.leads || {};
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '–'; };
+    set('ai-stat-analyzed',  leads.analyzed   ?? data.requests ?? 0);
+    set('ai-stat-quentes',   leads.quentes    ?? 0);
+    set('ai-stat-mornos',    leads.mornos     ?? 0);
+    set('ai-stat-frios',     leads.frios      ?? 0);
+    set('ai-stat-converted', leads.converted  ?? 0);
+    set('ai-stat-followups', leads.followedUp ?? 0);
+  } catch (_) {
+    // silent — stats are non-critical
+  }
 }
 
 // --- UPDATE LEAD STATUS VIA API ---

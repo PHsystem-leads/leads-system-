@@ -6,6 +6,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { qualifyLead, generateApproachMessage, analyzeConversation, generateFollowUp, suggestNextAction } from './services/ai/leadAnalyzer.js';
+import { getAIStats, hasAIKeys } from './services/ai/openrouter.js';
 
 dotenv.config();
 
@@ -66,6 +68,14 @@ async function readLeads() {
         reviews: l.reviews,
         claude_analysis: l.claude_analysis,
         suggested_message: l.suggested_message,
+        ai_score: l.ai_score,
+        ai_temperatura: l.ai_temperatura,
+        ai_resumo: l.ai_resumo,
+        ai_motivo: l.ai_motivo,
+        proxima_acao: l.proxima_acao,
+        last_contact_at: l.last_contact_at,
+        follow_up_count: l.follow_up_count || 0,
+        conversation_analysis: l.conversation_analysis,
         updatedAt: l.updated_at
       }));
     } catch (e) {
@@ -85,6 +95,33 @@ async function readLeads() {
 // Helper to write to local cache (only used in fallback mode)
 async function writeLocalLeads(leads) {
   await fs.writeFile(LEADS_FILE, JSON.stringify(leads, null, 2), 'utf-8');
+}
+
+// Helper centralizado de atualização de lead (Supabase ou JSON)
+async function updateLeadInDB(id, fields) {
+  const timestamp = new Date().toISOString();
+  const updateData = { ...fields };
+  if (!updateData.updated_at) updateData.updated_at = timestamp;
+  // Remove undefined
+  Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('leads')
+      .update(updateData)
+      .eq('id', id)
+      .select();
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    return { ...data[0], updatedAt: data[0].updated_at };
+  } else {
+    const leads = await readLeads();
+    const idx = leads.findIndex(l => l.id === id);
+    if (idx === -1) return null;
+    leads[idx] = { ...leads[idx], ...updateData, updatedAt: timestamp };
+    await writeLocalLeads(leads);
+    return leads[idx];
+  }
 }
 
 // --- API STATUS ENDPOINT ---
@@ -261,6 +298,12 @@ app.post('/api/whatsapp/webhook', async (req, res) => {
 
     await saveMessage(msg);
     console.log(`[WhatsApp Inbox] Recebido de ${pushName} (${phone}): ${content.slice(0, 60)}`);
+
+    // Análise de conversa em background (não bloqueia o webhook)
+    triggerConversationAnalysis(phone).catch(e =>
+      console.error('[Webhook Analysis Error]', e.message)
+    );
+
     res.json({ ok: true });
   } catch (e) {
     console.error('[Webhook Error]', e.message);
@@ -866,182 +909,42 @@ async function qualifyLeadById(leadId) {
       simulatedMsg = `Olá! Tudo bem no ${lead.name}? Parabéns pela belíssima variedade de produtos pet que vocês oferecem aos tutores! Sabemos que a competição com os grandes e-commerces pet é difícil. Por isso, criamos o Pet Hub: um sistema que monitora a compra de ração do seu cliente de bairro e envia um lembrete automático de recompra rápida pelo WhatsApp exatamente 25 dias depois, com entrega expressa da sua loja. Isso blinda seus clientes contra a concorrência e recupera vendas perdidas. Toparia fazer um teste gratuito de 7 dias com nosso sistema?`;
     }
 
+    const _aiScore = simulatedScore * 10;
     qualifiedFields = {
       score: simulatedScore,
+      ai_score: _aiScore,
+      ai_temperatura: _aiScore >= 70 ? 'quente' : _aiScore >= 40 ? 'morno' : 'frio',
+      ai_resumo: `${lead.name} — potencial ${_aiScore >= 70 ? 'alto' : _aiScore >= 40 ? 'médio' : 'baixo'} de conversão`,
+      ai_motivo: `Lead ${lead.segment.toLowerCase()} com perfil compatível para automação Pet Hub`,
+      proxima_acao: 'Enviar mensagem de abordagem personalizada via WhatsApp',
       claude_analysis: simulatedAnalysis,
       suggested_message: simulatedMsg,
       status: 'Qualificado',
       updatedAt: new Date().toISOString()
     };
-  } else if (openrouterKey) {
-    // --- REAL OPENROUTER INTEGRATION ---
-    try {
-      console.log(`[OpenRouter API] Qualificando lead pet ${lead.name} via ${openrouterModel}...`);
-
-      const prompt = `Você é a inteligência artificial da Pet Hub, uma plataforma SaaS de automação de marketing e CRM para empresas pet (clínicas veterinárias, pet shops, banho e tosa, creches, adestradores).
-Seu objetivo é analisar as informações do seguinte lead e retornar:
-1. Uma qualificação crítica de 0 a 10 de quão atraente este lead é para contratar a Pet Hub.
-2. Uma análise sucinta de dor/oportunidade do negócio em português de até 3 frases.
-3. Um script de mensagem de primeira abordagem (cold approach) no WhatsApp/Instagram em português extremamente personalizada, persuasiva, amigável e profissional. Use o nome do estabelecimento e os dados fornecidos (como número de avaliações, seguidores, bio, ou localização) para soar autêntico e natural. A mensagem deve focar em propor uma demonstração de 10 minutos ou teste gratuito, destacando uma funcionalidade chave que resolva o problema do segmento dele (Ex: lembrete de vacinas para clínicas; clube de assinatura recorrente para banho e tosa; recorrência de pacotes e reserva de hotel para creches; alerta de recompra automática de ração para pet shops de bairro).
-
-DADOS DO LEAD PET:
-- Nome do Estabelecimento: "${lead.name}"
-- Plataforma de Origem: "${lead.platform}"
-- Segmento Pet: "${lead.segment}"
-- Instagram Handle / Localização: "${lead.handle}"
-- Seguidores Instagram: ${lead.followers || 'Não informado'}
-- Média Avaliação Google Maps: ${lead.rating || 'Não informado'}
-- Número Avaliações Google Maps: ${lead.reviews || 'Não informado'}
-- Telefone de Contato: "${lead.phone || 'Não informado'}"
-- E-mail: "${lead.email || 'Não informado'}"
-- Endereço / Cidade: "${lead.address || 'Não informado'}"
-- Biografia / Descrição: "${lead.bio || 'Não informado'}"
-
-FORMATO DA SUA RESPOSTA:
-Sua resposta deve ser estruturada EXATAMENTE em formato JSON puro, sem blocos de código markdown (\`\`\`json ... \`\`\`), apenas o objeto JSON com as chaves "score" (inteiro de 0 a 10), "claude_analysis" (string com a análise em português) e "suggested_message" (string com a mensagem de cold approach em português).
-Não adicione qualquer texto introdutório ou conclusivo.`;
-
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openrouterKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://pethub-leads.vercel.app',
-          'X-Title': 'Pet Hub Leads CRM'
-        },
-        body: JSON.stringify({
-          model: openrouterModel,
-          messages: [
-            { role: 'user', content: prompt }
-          ]
-        })
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Erro na API do OpenRouter: ${errText}`);
-      }
-
-      const openrouterData = await response.json();
-      const rawContent = openrouterData.choices[0].message.content;
-      
-      let parsedResult;
-      try {
-        let jsonString = rawContent;
-        if (jsonString.includes('```json')) {
-          jsonString = jsonString.split('```json')[1].split('```')[0].trim();
-        } else if (jsonString.includes('```')) {
-          jsonString = jsonString.split('```')[1].split('```')[0].trim();
-        }
-        parsedResult = JSON.parse(jsonString.trim());
-      } catch (e) {
-        const scoreMatch = rawContent.match(/"score":\s*(\d+)/);
-        const analysisMatch = rawContent.match(/"claude_analysis":\s*"([^"]+)"/) || rawContent.match(/"analysis":\s*"([^"]+)"/);
-        const messageMatch = rawContent.match(/"suggested_message":\s*"([^"]+)"/) || rawContent.match(/"message":\s*"([^"]+)"/);
-        
-        parsedResult = {
-          score: scoreMatch ? parseInt(scoreMatch[1]) : 7,
-          claude_analysis: analysisMatch ? analysisMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da análise.',
-          suggested_message: messageMatch ? messageMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da abordagem.'
-        };
-      }
-
-      qualifiedFields = {
-        score: parsedResult.score || parsedResult.score === 0 ? parsedResult.score : 7,
-        claude_analysis: parsedResult.claude_analysis || parsedResult.analysis || 'Qualificação realizada via OpenRouter.',
-        suggested_message: parsedResult.suggested_message || parsedResult.message || 'Abordagem configurada via OpenRouter.',
-        status: 'Qualificado',
-        updatedAt: new Date().toISOString()
-      };
-
-    } catch (e) {
-      console.error('[OpenRouter API Error]', e);
-      throw new Error(`Erro na API do OpenRouter: ${e.message}`);
-    }
   } else {
-    // --- REAL CLAUDE INTEGRATION ---
+    // --- REAL AI MODE via serviço centralizado (OpenRouter ou Claude) ---
     try {
-      console.log(`[Claude API] Qualificando lead pet ${lead.name} via Anthropic...`);
+      console.log(`[AI Service] Qualificando lead "${lead.name}"...`);
 
-      const prompt = `Você é a inteligência artificial da Pet Hub, uma plataforma SaaS de automação de marketing e CRM para empresas pet (clínicas veterinárias, pet shops, banho e tosa, creches, adestradores).
-Seu objetivo é analisar as informações do seguinte lead e retornar:
-1. Uma qualificação crítica de 0 a 10 de quão atraente este lead é para contratar a Pet Hub.
-2. Uma análise sucinta de dor/oportunidade do negócio em português de até 3 frases.
-3. Um script de mensagem de primeira abordagem (cold approach) no WhatsApp/Instagram em português extremamente personalizada, persuasiva, amigável e profissional. Use o nome do estabelecimento e os dados fornecidos (como número de avaliações, seguidores, bio, ou localização) para soar autêntico e natural. A mensagem deve focar em propor uma demonstração de 10 minutos ou teste gratuito, destacando uma funcionalidade chave que resolva o problema do segmento dele (Ex: lembrete de vacinas para clínicas; clube de assinatura recorrente para banho e tosa; recorrência de pacotes e reserva de hotel para creches; alerta de recompra automática de ração para pet shops de bairro).
-
-DADOS DO LEAD PET:
-- Nome do Estabelecimento: "${lead.name}"
-- Plataforma de Origem: "${lead.platform}"
-- Segmento Pet: "${lead.segment}"
-- Instagram Handle / Localização: "${lead.handle}"
-- Seguidores Instagram: ${lead.followers || 'Não informado'}
-- Média Avaliação Google Maps: ${lead.rating || 'Não informado'}
-- Número Avaliações Google Maps: ${lead.reviews || 'Não informado'}
-- Telefone de Contato: "${lead.phone || 'Não informado'}"
-- E-mail: "${lead.email || 'Não informado'}"
-- Endereço / Cidade: "${lead.address || 'Não informado'}"
-- Biografia / Descrição: "${lead.bio || 'Não informado'}"
-
-FORMATO DA SUA RESPOSTA:
-Sua resposta deve ser estruturada EXATAMENTE em formato JSON puro, sem blocos de código markdown (\`\`\`json ... \`\`\`), apenas o objeto JSON com as chaves "score" (inteiro de 0 a 10), "claude_analysis" (string com a análise em português) e "suggested_message" (string com a mensagem de cold approach em português).
-Não adicione qualquer texto introdutório ou conclusivo.`;
-
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': claudeKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1200,
-          messages: [
-            { role: 'user', content: prompt }
-          ]
-        })
-      });
-
-      if (!claudeRes.ok) {
-        const errText = await claudeRes.text();
-        throw new Error(`Erro na API do Claude: ${errText}`);
-      }
-
-      const claudeData = await claudeRes.json();
-      const rawContent = claudeData.content[0].text;
-      
-      let parsedResult;
-      try {
-        let jsonString = rawContent;
-        if (jsonString.includes('```json')) {
-          jsonString = jsonString.split('```json')[1].split('```')[0].trim();
-        } else if (jsonString.includes('```')) {
-          jsonString = jsonString.split('```')[1].split('```')[0].trim();
-        }
-        parsedResult = JSON.parse(jsonString.trim());
-      } catch (e) {
-        const scoreMatch = rawContent.match(/"score":\s*(\d+)/);
-        const analysisMatch = rawContent.match(/"claude_analysis":\s*"([^"]+)"/);
-        const messageMatch = rawContent.match(/"suggested_message":\s*"([^"]+)"/);
-        
-        parsedResult = {
-          score: scoreMatch ? parseInt(scoreMatch[1]) : 7,
-          claude_analysis: analysisMatch ? analysisMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da análise.',
-          suggested_message: messageMatch ? messageMatch[1].replace(/\\n/g, '\n') : 'Falha na formatação da abordagem.'
-        };
-      }
-
+      const aiResult = await qualifyLead(lead);
+      const proximaAcao = suggestNextAction(lead);
       qualifiedFields = {
-        score: parsedResult.score || 7,
-        claude_analysis: parsedResult.claude_analysis || 'Qualificação realizada.',
-        suggested_message: parsedResult.suggested_message || 'Abordagem configurada.',
-        status: 'Qualificado',
-        updatedAt: new Date().toISOString()
+        score:             aiResult.score,
+        ai_score:          aiResult.ai_score,
+        ai_temperatura:    aiResult.ai_temperatura,
+        ai_resumo:         aiResult.ai_resumo,
+        ai_motivo:         aiResult.ai_motivo,
+        claude_analysis:   aiResult.claude_analysis,
+        suggested_message: aiResult.suggested_message,
+        proxima_acao:      proximaAcao,
+        status:            'Qualificado',
+        updatedAt:         new Date().toISOString()
       };
 
     } catch (e) {
-      console.error('[Claude API Error]', e);
-      throw new Error(`Erro na API do Claude: ${e.message}`);
+      console.error('[AI Service Error]', e);
+      throw new Error(`Erro na IA: ${e.message}`);
     }
   }
 
@@ -1051,11 +954,16 @@ Não adicione qualquer texto introdutório ou conclusivo.`;
     const { data, error } = await supabase
       .from('leads')
       .update({
-        score: qualifiedFields.score,
-        claude_analysis: qualifiedFields.claude_analysis,
+        score:             qualifiedFields.score,
+        ai_score:          qualifiedFields.ai_score,
+        ai_temperatura:    qualifiedFields.ai_temperatura,
+        ai_resumo:         qualifiedFields.ai_resumo,
+        ai_motivo:         qualifiedFields.ai_motivo,
+        claude_analysis:   qualifiedFields.claude_analysis,
         suggested_message: qualifiedFields.suggested_message,
-        status: qualifiedFields.status,
-        updated_at: qualifiedFields.updatedAt
+        proxima_acao:      qualifiedFields.proxima_acao,
+        status:            qualifiedFields.status,
+        updated_at:        qualifiedFields.updatedAt
       })
       .eq('id', leadId)
       .select();
@@ -1131,13 +1039,13 @@ async function approachLeadById(leadId) {
   if (supabase) {
     const { data, error } = await supabase
       .from('leads')
-      .update({ status: 'Abordado', updated_at: timestamp })
+      .update({ status: 'Abordado', updated_at: timestamp, last_contact_at: timestamp, follow_up_count: 0 })
       .eq('id', leadId)
       .select();
     if (error) throw error;
     return { ...data[0], updatedAt: data[0].updated_at, whatsappSent, whatsappError };
   } else {
-    leads[idx] = { ...lead, ...updatedFields };
+    leads[idx] = { ...lead, ...updatedFields, last_contact_at: timestamp, follow_up_count: 0 };
     await writeLocalLeads(leads);
     return leads[idx];
   }
@@ -1243,6 +1151,185 @@ setInterval(async () => {
     console.error('[Autopilot Backend Error]', e.message);
   }
 }, 60000);
+
+// ─── AI INTELLIGENCE MODULE ─────────────────────────────────────────────────
+
+// Analisa conversa do WhatsApp em background após nova mensagem recebida
+async function triggerConversationAnalysis(phone) {
+  if (!hasAIKeys()) return; // Sem chaves de IA, pula análise
+  const [leads, messages] = await Promise.all([readLeads(), readMessages()]);
+  const lead = leads.find(l => l.phone && sanitizePhone(l.phone) === sanitizePhone(phone));
+  if (!lead) return;
+
+  const convMsgs = messages
+    .filter(m => sanitizePhone(m.phone) === sanitizePhone(phone))
+    .slice(0, 30);
+
+  const analysis = await analyzeConversation(lead, convMsgs);
+  const updates  = {
+    conversation_analysis: JSON.stringify(analysis),
+    proxima_acao:         analysis.proximaAcao,
+    last_contact_at:      new Date().toISOString()
+  };
+
+  if (analysis.shouldMove && analysis.newStage) {
+    updates.status = analysis.newStage;
+    console.log(`[AI] Auto-movendo "${lead.name}" → "${analysis.newStage}" (análise de conversa)`);
+  }
+
+  await updateLeadInDB(lead.id, updates);
+}
+
+// POST /api/leads/generate-message — Gera primeira mensagem personalizada
+app.post('/api/leads/generate-message', async (req, res) => {
+  const { leadId } = req.body;
+  if (!leadId) return res.status(400).json({ error: 'leadId é obrigatório.' });
+
+  try {
+    const leads = await readLeads();
+    const lead  = leads.find(l => l.id === leadId);
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+
+    let message;
+    if (!hasAIKeys()) {
+      // Modo simulação: retorna mensagem sugerida existente ou default
+      message = lead.suggested_message && !lead.suggested_message.includes('indisponível')
+        ? lead.suggested_message
+        : `Olá, equipe do ${lead.name}! Somos da Pet Hub, plataforma de automação para ${lead.segment.toLowerCase()}. Gostariam de conhecer como ajudamos negócios pet a automatizarem agendamentos e comunicação com tutores via WhatsApp? Uma rápida demonstração de 10 minutos pode transformar a gestão do seu negócio!`;
+    } else {
+      const messages = await readMessages();
+      const history  = lead.phone
+        ? messages.filter(m => sanitizePhone(m.phone) === sanitizePhone(lead.phone))
+        : [];
+      message = await generateApproachMessage(lead, history);
+    }
+
+    // Salva mensagem gerada no lead
+    await updateLeadInDB(leadId, { suggested_message: message });
+
+    res.json({ success: true, message });
+  } catch (e) {
+    console.error('[Generate Message Error]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/whatsapp/analyze — Analisa conversa e retorna insights + move lead
+app.post('/api/whatsapp/analyze', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'phone é obrigatório.' });
+
+  try {
+    const [leads, messages] = await Promise.all([readLeads(), readMessages()]);
+    const lead = leads.find(l => l.phone && sanitizePhone(l.phone) === sanitizePhone(phone));
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado para este número.' });
+
+    const convMsgs = messages
+      .filter(m => sanitizePhone(m.phone) === sanitizePhone(phone))
+      .slice(0, 30);
+
+    const analysis = await analyzeConversation(lead, convMsgs);
+    const updates  = {
+      conversation_analysis: JSON.stringify(analysis),
+      proxima_acao:         analysis.proximaAcao
+    };
+
+    if (analysis.shouldMove && analysis.newStage) {
+      updates.status = analysis.newStage;
+    }
+
+    const updated = await updateLeadInDB(lead.id, updates);
+    res.json({ analysis, lead: updated });
+  } catch (e) {
+    console.error('[Analyze Error]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/ai/stats — Métricas de uso da IA + distribuição de temperatura
+app.get('/api/ai/stats', async (req, res) => {
+  try {
+    const [aiStats, leads] = await Promise.all([
+      Promise.resolve(getAIStats()),
+      readLeads()
+    ]);
+
+    const analyzed   = leads.filter(l => l.ai_temperatura).length;
+    const quentes    = leads.filter(l => l.ai_temperatura === 'quente').length;
+    const mornos     = leads.filter(l => l.ai_temperatura === 'morno').length;
+    const frios      = leads.filter(l => l.ai_temperatura === 'frio').length;
+    const converted  = leads.filter(l => l.status === 'Convertido').length;
+    const followedUp = leads.filter(l => (l.follow_up_count || 0) > 0).length;
+    const taxaResposta = analyzed > 0
+      ? Math.round((leads.filter(l => l.conversation_analysis).length / analyzed) * 100)
+      : 0;
+
+    res.json({
+      ...aiStats,
+      leads: { analyzed, quentes, mornos, frios, converted, followedUp, taxaResposta }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── FOLLOW-UP AUTOMÁTICO (verifica a cada 30 minutos) ──────────────────────
+setInterval(async () => {
+  if (!autopilotActive || !hasAIKeys()) return;
+  try {
+    const leads = await readLeads();
+    const now   = new Date();
+
+    const eligible = leads.filter(l =>
+      (l.status === 'Abordado' || l.status === 'Em conversa') &&
+      l.last_contact_at &&
+      (l.follow_up_count || 0) < 3 &&
+      l.phone
+    );
+
+    for (const lead of eligible) {
+      const lastContact  = new Date(lead.last_contact_at);
+      const hoursSince   = (now - lastContact) / (1000 * 60 * 60);
+      const followupDone = lead.follow_up_count || 0;
+
+      let doFollowUp = false;
+      const nextAttempt = followupDone + 1;
+
+      if      (followupDone === 0 && hoursSince >= 24)  doFollowUp = true;
+      else if (followupDone === 1 && hoursSince >= 72)  doFollowUp = true;
+      else if (followupDone === 2 && hoursSince >= 168) doFollowUp = true;
+
+      if (!doFollowUp) continue;
+
+      try {
+        const allMsgs  = await readMessages();
+        const history  = allMsgs.filter(m => sanitizePhone(m.phone) === sanitizePhone(lead.phone));
+        const followMsg = await generateFollowUp(lead, nextAttempt, history);
+
+        await sendWhatsAppMessage(lead.phone, followMsg);
+        await saveMessage({
+          id:        `msg-${Date.now()}-fu${nextAttempt}`,
+          phone:     sanitizePhone(lead.phone) || lead.phone,
+          name:      'Pet Hub',
+          direction: 'out',
+          content:   followMsg,
+          timestamp: now.toISOString()
+        });
+
+        await updateLeadInDB(lead.id, {
+          follow_up_count: nextAttempt,
+          last_contact_at: now.toISOString()
+        });
+
+        console.log(`[Follow-up] #${nextAttempt} enviado para "${lead.name}"`);
+      } catch (e) {
+        console.error(`[Follow-up Error] ${lead.name}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[Follow-up Scheduler Error]', e.message);
+  }
+}, 30 * 60 * 1000);
 
 // --- LOAD CLIENT APPLICATION ---
 app.get('*', (req, res) => {
