@@ -8,6 +8,37 @@ import { callAI, parseJSON, hasAIKeys } from './openrouter.js';
 
 const PIPELINE_STAGES = ['Descoberto', 'Qualificado', 'Abordado', 'Para humano', 'Convertido', 'Em conversa'];
 
+// ─── CONTEXTO DE PRODUTO (injetado em todos os prompts de abordagem) ─────────
+
+const HUBIA_SISTEMA = `Você é a HubIA, a inteligência artificial do ecossistema Pet Hub — plataforma SaaS de automação de CRM e marketing para negócios pet brasileiros. Seu papel é ajudar a equipe de vendas a abordar estabelecimentos pet de forma ultra-personalizada, mostrando como o Pet Hub resolve problemas reais do dia a dia deles.`;
+
+const PRODUTO_CONTEXTO = `
+## SOBRE O PET HUB E A HUBIA
+A HubIA é o módulo de IA do Pet Hub, que automatiza CRM, marketing e operações para qualquer negócio pet. Ao apresentar o produto, refira-se sempre como "Pet Hub com HubIA" ou "nossa plataforma com HubIA".
+
+## FUNCIONALIDADE TÁXI DOG — USE SEMPRE NAS ABORDAGENS
+O Táxi Dog é o módulo de gestão logística integrado ao CRM Pet Hub. Ele resolve completamente a dor de coordenar rotas, motoristas e comunicação com tutores. Apresente-o como diferencial competitivo concreto:
+
+**1. Automação WhatsApp em Tempo Real (via HubIA)**
+A HubIA dispara mensagens automáticas e personalizadas para o tutor em cada etapa:
+- Saída do motorista: "Olá [nome]! O [pet] é o próximo. Nosso motorista está a caminho — chegará em ~15 min. Deixe-o com a coleira! 🐶"
+- Chegada no pet: "O [pet] chegou com segurança! Já está indo para o banho. 🛁"
+- Retorno: "O [pet] ficou pronto e cheiroso! Já entrou no Táxi Dog voltando para casa. Previsão: 20 min."
+Resultado: zero ligações de "cadê meu pet?" na recepção.
+
+**2. Clube Leva e Traz (Assinaturas Recorrentes)**
+Pacotes mensais (ex: 4 Banhos + 4 Táxi Dogs) cobrados automaticamente no cartão do tutor via CRM. Receita previsível todo mês + fidelização automática dos clientes.
+
+**3. Otimização Inteligente de Rotas**
+A HubIA agrupa coletas e entregas por bairro/proximidade e calcula a sequência ideal para o motorista — menos combustível, mais corridas por dia, melhor uso dos kennels.
+
+**4. Controle de Ocupação e Segurança**
+Registro de qual kennel o pet está, check-in digital pelo motorista, histórico de horários de entrada/saída no veículo — transparência total para o estabelecimento e para o tutor.
+`;
+
+// Segmentos que se beneficiam mais do Táxi Dog (para personalizar ênfase)
+const SEGMENTOS_TAXI = ['pet shop', 'banho', 'tosa', 'clínica', 'veterinário', 'hotel', 'hotelzinho', 'day care', 'daycare'];
+
 // ─── QUALIFICAÇÃO AVANÇADA ────────────────────────────────────────────────────
 /**
  * Qualifica um lead com IA, retornando campos enriquecidos.
@@ -17,17 +48,23 @@ const PIPELINE_STAGES = ['Descoberto', 'Qualificado', 'Abordado', 'Para humano',
 export async function qualifyLead(lead) {
   if (!hasAIKeys()) throw new Error('Sem chaves de IA configuradas');
 
-  const systemPrompt = `Você é a IA de vendas da Pet Hub, plataforma SaaS de automação de CRM e marketing para o setor pet brasileiro. Analise leads B2B e responda sempre em JSON puro, sem texto adicional.`;
+  const systemPrompt = `${HUBIA_SISTEMA} Analise leads B2B pet e responda sempre em JSON puro, sem texto adicional.`;
 
-  const prompt = `Analise este lead e retorne exatamente este JSON:
+  // Verifica se o segmento tem fit alto com Táxi Dog para personalizar a análise
+  const segLower = (lead.segment || '').toLowerCase();
+  const taxiDogFit = SEGMENTOS_TAXI.some(s => segLower.includes(s));
+
+  const prompt = `${PRODUTO_CONTEXTO}
+
+Analise este lead pet e retorne exatamente este JSON:
 {
-  "score": <inteiro 0-100 representando potencial de conversão>,
+  "score": <inteiro 0-100 representando potencial de conversão com a plataforma Pet Hub + HubIA>,
   "temperatura": <"quente" | "morno" | "frio">,
   "segmento": <"segmento principal do negócio">,
-  "resumo": <"resumo executivo em 1 frase curta">,
-  "motivo": <"principal motivo do score em 1 frase">,
-  "claude_analysis": <"análise de dor e oportunidade em 2-3 frases">,
-  "suggested_message": <"mensagem de abordagem WhatsApp ULTRA-personalizada em português, mínimo 3 parágrafos, usa nome do estabelecimento e dados específicos">
+  "resumo": <"resumo executivo em 1 frase curta sobre o estabelecimento">,
+  "motivo": <"principal motivo do score em 1 frase — relate ao fit com Pet Hub / HubIA / Táxi Dog">,
+  "claude_analysis": <"análise de dor e oportunidade em 2-3 frases: que problema operacional eles enfrentam hoje e como HubIA + Táxi Dog resolve">,
+  "suggested_message": <"mensagem de abordagem WhatsApp ULTRA-personalizada, mínimo 3 parágrafos, usa nome do estabelecimento e dados específicos do perfil, menciona a HubIA e o Táxi Dog como solução concreta para dores deste tipo de negócio${taxiDogFit ? ' — enfatize o Táxi Dog como diferencial principal' : ''}">
 }
 
 DADOS DO LEAD:
@@ -90,7 +127,7 @@ Retorne APENAS o JSON. Não adicione texto antes ou depois.`;
 export async function generateApproachMessage(lead, conversationHistory = []) {
   if (!hasAIKeys()) throw new Error('Sem chaves de IA configuradas');
 
-  const systemPrompt = `Você é especialista em vendas consultivas B2B para o setor pet brasileiro. Crie mensagens de abordagem extremamente personalizadas. Nunca use templates genéricos. Use sempre o nome do estabelecimento e dados específicos do negócio.`;
+  const systemPrompt = `${HUBIA_SISTEMA} Crie mensagens de abordagem extremamente personalizadas. Nunca use templates genéricos. Use sempre o nome do estabelecimento e dados reais do perfil.`;
 
   const historyCtx = conversationHistory.length > 0
     ? `\n\nHistórico de interações anteriores:\n${
@@ -101,34 +138,42 @@ export async function generateApproachMessage(lead, conversationHistory = []) {
     : '';
 
   const ctx = [
-    lead.rating   ? `Avaliação Google: ${lead.rating}★ (${lead.reviews} avaliações)` : null,
+    lead.rating    ? `Avaliação Google: ${lead.rating}★ (${lead.reviews} avaliações)` : null,
     lead.followers ? `Seguidores Instagram: ${lead.followers.toLocaleString('pt-BR')}` : null,
-    lead.bio      ? `Descrição: ${lead.bio.slice(0, 120)}` : null,
-    lead.address  ? `Localização: ${lead.address}` : null
+    lead.bio       ? `Descrição: ${lead.bio.slice(0, 120)}` : null,
+    lead.address   ? `Localização: ${lead.address}` : null
   ].filter(Boolean).join('\n');
 
-  const prompt = `Crie uma mensagem de abordagem WhatsApp para este lead pet:
+  const segLower = (lead.segment || '').toLowerCase();
+  const taxiDogFit = SEGMENTOS_TAXI.some(s => segLower.includes(s));
+
+  const prompt = `${PRODUTO_CONTEXTO}
+
+Crie uma mensagem de primeira abordagem via WhatsApp para este estabelecimento pet:
 
 Estabelecimento: ${lead.name}
 Segmento: ${lead.segment}
 ${ctx}${historyCtx}
 
-Regras obrigatórias:
-1. Use o nome "${lead.name}" de forma natural no início
-2. Mencione pelo menos 1 dado específico do perfil (avaliação, seguidores, ou trecho da bio)
-3. Apresente 1 funcionalidade da Pet Hub que resolve o problema principal deste segmento
-4. Proponha uma demonstração de 10 minutos SEM compromisso
-5. Tom: profissional, caloroso, direto
-6. 3-4 parágrafos curtos
-7. Termine com pergunta aberta
+REGRAS OBRIGATÓRIAS:
+1. Use o nome "${lead.name}" de forma natural no início (sem "Olá, [Nome]!" genérico)
+2. Mencione pelo menos 1 dado específico e real do perfil acima (avaliação, seguidores, bio ou localização)
+3. Apresente a HubIA como solução de automação e CRM para o problema principal deste segmento
+4. ${taxiDogFit
+    ? 'Destaque o TÁXI DOG como diferencial principal — descreva pelo menos 2 das 4 funcionalidades (WhatsApp automático, Clube Leva e Traz, rotas, controle de kennels) aplicadas ao dia a dia deste negócio'
+    : 'Mencione o Táxi Dog como exemplo de como a HubIA automatiza operações complexas do setor pet'}
+5. Proponha uma demonstração de 10 minutos SEM compromisso — seja específico ("que tal amanhã às 10h?")
+6. Tom: consultivo, caloroso, direto — como um parceiro que conhece o setor, não um vendedor genérico
+7. 3-4 parágrafos curtos, linguagem de WhatsApp (não formal demais)
+8. Termine com pergunta aberta que convide a resposta
 
-Retorne APENAS a mensagem, sem introduções.`;
+Retorne APENAS a mensagem pronta para envio, sem introduções ou comentários.`;
 
   const { content } = await callAI({
     messages:    [{ role: 'user', content: prompt }],
     systemPrompt,
     temperature: 0.75,
-    maxTokens:   700
+    maxTokens:   800
   });
 
   return content.trim();
@@ -159,24 +204,26 @@ export async function analyzeConversation(lead, messages) {
   if (!hasAIKeys()) return fallback;
   if (!messages || messages.length === 0) return fallback;
 
-  const systemPrompt = `Você analisa conversas de vendas B2B para um CRM pet. Identifica sinais de compra, objeções e decide se o lead deve avançar na pipeline. Responda em JSON puro.`;
+  const systemPrompt = `${HUBIA_SISTEMA} Você analisa conversas de vendas B2B do setor pet. Identifica sinais de compra, objeções e decide se o lead deve avançar na pipeline. Conhece a fundo a funcionalidade Táxi Dog e como ela resolve dores logísticas pet. Responda em JSON puro.`;
 
   const convText = messages
     .slice(-25)
     .map(m => `${m.direction === 'out' ? '[Pet Hub]' : '[Lead]'}: ${m.content}`)
     .join('\n');
 
-  const prompt = `Analise esta conversa de vendas B2B e retorne exatamente este JSON:
+  const prompt = `${PRODUTO_CONTEXTO}
+
+Analise esta conversa de vendas B2B (Pet Hub + HubIA) e retorne exatamente este JSON:
 {
   "sentimento": <"positivo" | "neutro" | "negativo" | "ansioso" | "desinteressado">,
   "interesse": <"alto" | "medio" | "baixo" | "sem interesse">,
   "urgencia": <"alta" | "media" | "baixa">,
-  "proximaAcao": <"ação específica recomendada ao vendedor, máximo 8 palavras">,
+  "proximaAcao": <"ação específica recomendada ao vendedor em máximo 8 palavras — se há objeção, sugira como contorná-la com HubIA/Táxi Dog">,
   "resumo": <"resumo executivo da conversa em 1 frase">,
-  "pedidoDemo": <true se pediu demonstração>,
-  "pedidoPreco": <true se perguntou sobre preço/planos>,
+  "pedidoDemo": <true se pediu demonstração ou agendamento>,
+  "pedidoPreco": <true se perguntou sobre preço, planos ou custo>,
   "querFechar": <true se demonstrou intenção clara de contratar>,
-  "objecao": <"principal objeção levantada" ou null>,
+  "objecao": <"principal objeção levantada (preço, complexidade, tempo, etc.)" ou null>,
   "shouldMove": <true se deve mover de etapa na pipeline>,
   "newStage": <"Para humano" | "Convertido" | null>
 }
@@ -227,41 +274,53 @@ Retorne APENAS o JSON.`;
  * @returns {Promise<string>}
  */
 export async function generateFollowUp(lead, attempt = 1, history = []) {
+  const segLower = (lead.segment || '').toLowerCase();
+  const taxiDogFit = SEGMENTOS_TAXI.some(s => segLower.includes(s));
+
   if (!hasAIKeys()) {
+    const taxiDogHint = taxiDogFit
+      ? `nosso Táxi Dog automatiza o leva e traz com WhatsApp automático para os tutores`
+      : `nossa HubIA automatiza CRM e comunicação com tutores via WhatsApp`;
     const msgs = [
-      `Olá! Sou da equipe Pet Hub. Passando para verificar se você recebeu nossa mensagem sobre automação para ${lead.segment?.toLowerCase() || 'seu negócio pet'}. Há algum momento disponível esta semana para uma conversa rápida?`,
-      `Oi, tudo bem? Estou tentando contato novamente da Pet Hub. Sabemos que a rotina de ${lead.segment?.toLowerCase() || 'um negócio pet'} é corrida! Temos uma solução que pode economizar horas por semana na gestão de clientes. Vale 10 minutos?`,
-      `Olá! Esta é nossa última tentativa de contato. Se não for o momento certo agora, sem problemas! Fica à vontade para entrar em contato quando quiser. Estaremos aqui. Bons negócios para o ${lead.name}!`
+      `Oi! Sou da equipe Pet Hub. Passando para ver se recebeu nossa mensagem sobre ${taxiDogHint}. Há algum momento disponível esta semana para uma conversa de 10 minutos?`,
+      `Oi, tudo bem? Tentando contato novamente da Pet Hub. Sabemos que a rotina de ${lead.segment?.toLowerCase() || 'negócio pet'} é corrida! Para te dar uma ideia do que entregamos: ${taxiDogHint} — clientes economizam horas toda semana. Vale 10 min?`,
+      `Olá! Esta é nossa última tentativa de contato. Se não for o momento agora, tudo bem — fica à vontade para nos chamar quando fizer sentido. Estaremos aqui! Sucesso para o ${lead.name}! 🐾`
     ];
     return msgs[Math.min(attempt - 1, 2)];
   }
 
-  const systemPrompt = `Você escreve follow-ups de vendas B2B para o setor pet. Mensagens curtas, respeitosas e com valor real. Retorne apenas a mensagem.`;
+  const systemPrompt = `${HUBIA_SISTEMA} Você escreve follow-ups de reengajamento B2B para o setor pet. Mensagens curtas, respeitosas e com valor concreto sobre a HubIA e o Táxi Dog. Retorne apenas a mensagem.`;
 
   const attemptLabel  = attempt === 1 ? 'primeiro' : attempt === 2 ? 'segundo' : 'terceiro e último';
   const sinceLabel    = attempt === 1 ? '1 dia'    : attempt === 2 ? '3 dias'  : '7 dias';
   const isLastAttempt = attempt >= 3;
 
   const historyCtx = history.length > 0
-    ? `\nÚltimas mensagens:\n${history.slice(-3).map(m => `${m.direction === 'out' ? 'Nós' : 'Lead'}: ${m.content.slice(0, 80)}`).join('\n')}`
+    ? `\nÚltimas mensagens trocadas:\n${history.slice(-3).map(m => `${m.direction === 'out' ? 'Nós' : 'Lead'}: ${m.content.slice(0, 80)}`).join('\n')}`
     : '';
+
+  const taxiDogInstruction = taxiDogFit
+    ? `Este estabelecimento tem fit alto com o Táxi Dog. No follow-up, mencione 1 benefício concreto e novo (que não foi dito antes) do Táxi Dog — pode ser o Clube Leva e Traz, a otimização de rotas, ou o controle de kennels.`
+    : `Mencione a HubIA como automação de CRM e WhatsApp para o segmento deles.`;
 
   const prompt = `Crie o ${attemptLabel} follow-up de reengajamento para este lead que não respondeu há ${sinceLabel}:
 
 Lead: ${lead.name} (${lead.segment})${lead.bio ? `\nBio: ${lead.bio.slice(0, 80)}` : ''}${historyCtx}
 
+${taxiDogInstruction}
+
 ${isLastAttempt
-  ? 'Esta é a ÚLTIMA tentativa. Seja respeitoso, mencione que é o último contato e deixe a porta aberta para o futuro.'
-  : 'Reforce brevemente o valor principal. Proponha data/horário específico para conversa de 10 min.'
+  ? 'ÚLTIMA tentativa: seja respeitoso e definitivo — mencione que é o último contato e deixe a porta aberta de forma genuína, sem pressão.'
+  : 'Reforce 1 benefício concreto novo. Proponha horário específico para conversa de 10 min (ex: "que tal amanhã às 14h?").'
 }
 
-Máximo 2 parágrafos. Retorne APENAS a mensagem.`;
+Máximo 2 parágrafos curtos. Tom WhatsApp (direto, humano). Retorne APENAS a mensagem.`;
 
   const { content } = await callAI({
     messages:    [{ role: 'user', content: prompt }],
     systemPrompt,
     temperature: 0.7,
-    maxTokens:   350
+    maxTokens:   380
   });
 
   return content.trim();
