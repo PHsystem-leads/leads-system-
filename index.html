@@ -972,6 +972,14 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
               </div>
               <span class="badge br" id="config-status-evolution">Não configurado</span>
             </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <strong>ScrapeGraphAI (Grafo Inteligente)</strong>
+                <div style="font-size:11.5px; color:var(--text-3)">Grafo de Conhecimento + Playwright Chromium + OpenRouter.</div>
+              </div>
+              <span class="badge br" id="config-status-scrapegraph">Pendente</span>
+            </div>
           </div>
 
           <h2>Como Configurar suas Credenciais</h2>
@@ -1410,15 +1418,24 @@ function updateStatusBadges() {
   // ScrapeGraphAI Status
   const dotScrapegraph = document.getElementById('dot-scrapegraph');
   const badgeScrapegraph = document.getElementById('header-badge-scrapegraph');
+  const configScrapegraph = document.getElementById('config-status-scrapegraph');
   if (badgeScrapegraph) {
     if (apiStatus.scrapegraph) {
       if (dotScrapegraph) dotScrapegraph.style.background = '#16A34A';
       badgeScrapegraph.style.color = 'var(--green)';
       badgeScrapegraph.innerHTML = `<div class="ai-dot" style="background:#16A34A; box-shadow:0 0 6px #16A34A"></div>ScrapeGraphAI: Ativo`;
+      if (configScrapegraph) {
+        configScrapegraph.className = 'badge bg';
+        configScrapegraph.textContent = 'Ativo (Python + Playwright)';
+      }
     } else {
       if (dotScrapegraph) dotScrapegraph.style.background = 'var(--amber)';
       badgeScrapegraph.style.color = 'var(--amber)';
       badgeScrapegraph.innerHTML = `<div class="ai-dot" style="background:var(--amber)"></div>ScrapeGraphAI: Pendente`;
+      if (configScrapegraph) {
+        configScrapegraph.className = 'badge br';
+        configScrapegraph.textContent = 'Pendente';
+      }
     }
   }
 
