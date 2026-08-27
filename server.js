@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
+import fsSync from 'fs';
+import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
@@ -130,13 +132,17 @@ async function updateLeadInDB(id, fields) {
 
 // --- API STATUS ENDPOINT ---
 app.get('/api/status', (req, res) => {
+  const venvPython = path.join(__dirname, 'services', 'scraper', '.venv', 'Scripts', 'python.exe');
+  const hasScrapegraphEnv = fsSync.existsSync(venvPython) || fsSync.existsSync(path.join(__dirname, 'services', 'scraper', 'scrapegraph_lead_finder.py'));
+
   res.json({
     apify: !!process.env.APIFY_API_KEY,
     claude: !!process.env.CLAUDE_API_KEY,
     openrouter: !!process.env.OPENROUTER_API_KEY,
-    openrouterModel: (process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat').trim().replace(/\.+$/, ''),
+    openrouterModel: (process.env.OPENROUTER_MODEL || 'openrouter/free').trim().replace(/\.+$/, ''),
     supabase: !!supabase,
     evolutionApi: !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_KEY && process.env.EVOLUTION_INSTANCE),
+    scrapegraph: hasScrapegraphEnv,
     port: PORT
   });
 });
@@ -564,6 +570,215 @@ app.delete('/api/leads/:id', async (req, res) => {
     console.error('[Delete Lead Error]', error);
     res.status(500).json({ error: `Erro ao excluir o lead: ${error.message}` });
   }
+});
+
+// --- SCRAPEGRAPHAI SCRAPER INTEGRATION ---
+async function runScrapeGraphAI(url, customPrompt) {
+  return new Promise((resolve, reject) => {
+    const venvPython = path.join(__dirname, 'services', 'scraper', '.venv', 'Scripts', 'python.exe');
+    const pythonCmd = fsSync.existsSync(venvPython) 
+      ? venvPython 
+      : (process.env.SCRAPEGRAPH_PYTHON_PATH || 'python');
+
+    const scriptPath = path.join(__dirname, 'services', 'scraper', 'scrapegraph_lead_finder.py');
+    const args = ['--url', url];
+    if (customPrompt) {
+      args.push('--prompt', customPrompt);
+    }
+
+    console.log(`[ScrapeGraphAI] Executando scraper na URL: ${url} usando ${pythonCmd}...`);
+    const child = spawn(pythonCmd, [scriptPath, ...args], {
+      cwd: path.join(__dirname, 'services', 'scraper'),
+      env: { ...process.env }
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => { stdout += data.toString(); });
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code !== 0 && !stdout) {
+        return reject(new Error(`Processo ScrapeGraphAI falhou com código ${code}: ${stderr || 'Sem saída'}`));
+      }
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        if (parsed.success === false) {
+          return reject(new Error(parsed.error || 'Erro desconhecido na extração ScrapeGraphAI'));
+        }
+        resolve(parsed.lead || parsed);
+      } catch (err) {
+        console.error('[ScrapeGraphAI Parse Error] Output bruto:', stdout);
+        reject(new Error(`Falha ao ler JSON retornado pelo ScrapeGraphAI: ${err.message}`));
+      }
+    });
+
+    child.on('error', (err) => {
+      reject(new Error(`Não foi possível iniciar o Python: ${err.message}`));
+    });
+  });
+}
+
+// Endpoint para raspagem individual via ScrapeGraphAI
+app.post('/api/leads/scrape-url', async (req, res) => {
+  const { url, prompt, autoSave = true } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'A URL do site é obrigatória.' });
+  }
+
+  try {
+    const rawData = await runScrapeGraphAI(url, prompt);
+    const timestamp = new Date().toISOString();
+
+    const name = rawData.name || rawData.nome || 'Lead ScrapeGraph';
+    const handle = rawData.instagram || `@${name.toLowerCase().replace(/[^a-z0-9_]/g, '')}`;
+    const phone = rawData.phone || rawData.telefone || '';
+    const email = rawData.email || '';
+    const address = rawData.address || rawData.endereco || (rawData.city ? rawData.city : '');
+    const bio = rawData.bio_description || rawData.servicos || 'Extraído com ScrapeGraphAI';
+    const segment = rawData.segment || 'Pet Shop';
+    const salesNotes = rawData.sales_notes || rawData.observacoes || 'Extraído via IA ScrapeGraphAI.';
+
+    const newLead = {
+      id: `scrape-${Date.now()}`,
+      name,
+      handle,
+      platform: 'ScrapeGraphAI',
+      segment,
+      score: 8,
+      status: 'Descoberto',
+      phone,
+      email,
+      address,
+      bio: typeof bio === 'object' ? JSON.stringify(bio) : String(bio),
+      claude_analysis: salesNotes,
+      suggested_message: `Olá ${name}! Vi seu site e notei que oferecem serviços pet incríveis. O Pet Hub System pode ajudar a automatizar agendamentos e vendas no seu negócio. Podemos conversar?`,
+      updatedAt: timestamp
+    };
+
+    if (autoSave) {
+      if (supabase) {
+        const { error } = await supabase.from('leads').insert([{
+          id: newLead.id,
+          name: newLead.name,
+          handle: newLead.handle,
+          platform: newLead.platform,
+          segment: newLead.segment,
+          score: newLead.score,
+          status: newLead.status,
+          phone: newLead.phone,
+          email: newLead.email,
+          address: newLead.address,
+          bio: newLead.bio,
+          claude_analysis: newLead.claude_analysis,
+          suggested_message: newLead.suggested_message,
+          updated_at: timestamp
+        }]);
+
+        if (error) console.error('[Supabase Insert Error]', error.message);
+      } else {
+        const leads = await readLeads();
+        leads.unshift(newLead);
+        await writeLocalLeads(leads);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Lead "${name}" extraído com sucesso via ScrapeGraphAI!`,
+      lead: newLead,
+      raw: rawData
+    });
+  } catch (error) {
+    console.error('[ScrapeGraphAI API Error]', error);
+    res.status(500).json({ error: `Erro na extração ScrapeGraphAI: ${error.message}` });
+  }
+});
+
+// Endpoint para raspagem em lote (batch) via ScrapeGraphAI
+app.post('/api/leads/scrape-batch', async (req, res) => {
+  const { urls, prompt, autoSave = true } = req.body;
+
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: 'Uma lista de URLs (urls) é obrigatória.' });
+  }
+
+  const results = [];
+  const errors = [];
+
+  for (const url of urls) {
+    try {
+      const rawData = await runScrapeGraphAI(url, prompt);
+      const timestamp = new Date().toISOString();
+      const name = rawData.name || rawData.nome || 'Lead ScrapeGraph';
+      const handle = rawData.instagram || `@${name.toLowerCase().replace(/[^a-z0-9_]/g, '')}`;
+      const phone = rawData.phone || rawData.telefone || '';
+      const email = rawData.email || '';
+      const address = rawData.address || rawData.endereco || '';
+      const bio = rawData.bio_description || 'Extraído com ScrapeGraphAI';
+      const segment = rawData.segment || 'Pet Shop';
+      const salesNotes = rawData.sales_notes || rawData.observacoes || 'Extraído via IA ScrapeGraphAI.';
+
+      const leadObj = {
+        id: `scrape-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name,
+        handle,
+        platform: 'ScrapeGraphAI',
+        segment,
+        score: 8,
+        status: 'Descoberto',
+        phone,
+        email,
+        address,
+        bio: typeof bio === 'object' ? JSON.stringify(bio) : String(bio),
+        claude_analysis: salesNotes,
+        suggested_message: `Olá ${name}! Vi seu site e notei os serviços oferecidos. O Pet Hub System é o sistema ideal para organizar seus atendimentos pet. Quer conhecer mais?`,
+        updatedAt: timestamp
+      };
+
+      if (autoSave) {
+        if (supabase) {
+          await supabase.from('leads').insert([{
+            id: leadObj.id,
+            name: leadObj.name,
+            handle: leadObj.handle,
+            platform: leadObj.platform,
+            segment: leadObj.segment,
+            score: leadObj.score,
+            status: leadObj.status,
+            phone: leadObj.phone,
+            email: leadObj.email,
+            address: leadObj.address,
+            bio: leadObj.bio,
+            claude_analysis: leadObj.claude_analysis,
+            suggested_message: leadObj.suggested_message,
+            updated_at: timestamp
+          }]);
+        }
+      }
+
+      results.push({ url, lead: leadObj, raw: rawData });
+    } catch (err) {
+      errors.push({ url, error: err.message });
+    }
+  }
+
+  if (!supabase && autoSave && results.length > 0) {
+    const leads = await readLeads();
+    const newLeads = results.map(r => r.lead);
+    await writeLocalLeads([...newLeads, ...leads]);
+  }
+
+  res.json({
+    success: true,
+    totalScraped: results.length,
+    totalErrors: errors.length,
+    leads: results.map(r => r.lead),
+    details: results,
+    errors
+  });
 });
 
 // --- APIFY CAPTURE IA ENDPOINT ---
