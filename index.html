@@ -321,15 +321,9 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
     <div class="nav-group">CAPTAÇÃO INTELIGENTE</div>
 
     <div class="nav-item" onclick="go('captacao',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
-      Buscar Leads IA
-      <span class="nav-badge green" id="badge-total-leads">5</span>
-    </div>
-
-    <div class="nav-item" onclick="go('scrapegraph',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-      ScrapeGraph AI
-      <span class="nav-badge bp" style="font-size:9.5px">NOVO</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+      Prospecção Lote (ScrapeGraph)
+      <span class="nav-badge bp" style="font-size:9.5px">IA GRAPH</span>
     </div>
 
     <div class="nav-group">DASHBOARD & VENDAS</div>
@@ -484,7 +478,7 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
     </section>
 
     <!-- ════════════════════════
-         BUSCAR LEADS (CAPTAÇÃO IA)
+         PROSPECÇÃO DE PET SHOPS EM LOTE (SCRAPEGRAPH AI)
     ════════════════════════ -->
     <section class="section" id="sec-captacao">
       <div class="info-box" id="info-connection-status">
@@ -493,65 +487,93 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
 
       <div class="page-lead">
         <div>
-          <h1>Buscar Leads IA</h1>
-          <div class="page-desc">Escolha a plataforma pet, digite palavras-chave ou hashtags e capture leads instantaneamente.</div>
+          <h1>🤖 Prospecção de Pet Shops em Lote (ScrapeGraphAI)</h1>
+          <div class="page-desc">Busca inteligente e raspagem de pet shops, clínicas veterinárias e banho e tosa em lote via Grafos de Conhecimento IA e Playwright.</div>
         </div>
       </div>
 
-      <!-- Search Inputs -->
+      <!-- ScrapeGraphAI Search Inputs Container -->
       <div class="search-container">
-        <div class="search-grid">
-          <div class="form-group" style="margin-bottom:0">
-            <label>Plataforma de Busca</label>
-            <select id="search-platform" onchange="toggleSearchFields()">
-              <option value="Google Maps">Google Maps (Clínicas, Pet Shops locais)</option>
-              <option value="Instagram">Instagram (Hashtags, Perfis concorrentes)</option>
-            </select>
-          </div>
+        <!-- Tabs Mode Selection -->
+        <div style="display:flex; gap:12px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px">
+          <button class="btn btn-dark" id="btn-mode-search" onclick="switchCaptureMode('search')">🗺️ Busca em Lote por Cidade / Região</button>
+          <button class="btn" id="btn-mode-batch-urls" onclick="switchCaptureMode('batch_urls')">📦 Lista de Websites em Lote</button>
+          <button class="btn" id="btn-mode-single-url" onclick="switchCaptureMode('url')">🔗 URL Única de Pet Shop</button>
+        </div>
 
-          <div class="form-group" style="margin-bottom:0" id="group-query">
-            <label id="label-query">Segmento / Palavra-chave</label>
-            <input type="text" id="search-query" placeholder="Ex: Clínica Veterinária, Banho e Tosa, Adestrador">
-          </div>
+        <!-- Mode 1: Search Web by City -->
+        <div id="capture-panel-search">
+          <div class="search-grid" style="grid-template-columns: 1.2fr 1.2fr 110px 140px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Segmento Pet</label>
+              <select id="search-query-select">
+                <option value="Pet Shop">Pet Shop (Loja Completa)</option>
+                <option value="Clínica Veterinária">Clínica Veterinária</option>
+                <option value="Banho e Tosa">Banho e Tosa / Estética</option>
+                <option value="Creche Canina">Creche Canina / Daycare</option>
+                <option value="Adestrador">Adestrador / Comportamento</option>
+              </select>
+            </div>
 
-          <div class="form-group" style="margin-bottom:0" id="group-location">
-            <label>Cidade / Localização</label>
-            <input type="text" id="search-location" placeholder="Ex: São Paulo - SP, Belo Horizonte">
-          </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Cidade / Região Alvo</label>
+              <input type="text" id="search-location-input" placeholder="Ex: São Paulo - SP, Curitiba - PR, Rio de Janeiro" value="São Paulo - SP">
+            </div>
 
-          <div class="form-group" style="margin-bottom:0; display:none" id="group-hashtag">
-            <label>Hashtag Pet</label>
-            <input type="text" id="search-hashtag" placeholder="Ex: #petshop, #banhoetosa, #veterinaria">
-          </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Lote Leads</label>
+              <select id="search-limit-select">
+                <option value="3">3 leads</option>
+                <option value="5" selected>5 leads</option>
+                <option value="10">10 leads</option>
+                <option value="15">15 leads</option>
+              </select>
+            </div>
 
-          <div class="form-group" style="margin-bottom:0">
-            <label>Max Leads</label>
-            <select id="search-limit">
-              <option value="3">3 leads</option>
-              <option value="5" selected>5 leads</option>
-              <option value="10">10 leads</option>
-              <option value="15">15 leads</option>
-            </select>
+            <div>
+              <button class="btn btn-dark" style="width:100%; height:37px; justify-content:center; font-weight:600" id="btn-start-search" onclick="runLeadCapture()">
+                ⚡ Buscar Lote
+              </button>
+            </div>
           </div>
+        </div>
 
-          <div>
-            <button class="btn btn-dark" style="width:100%; height:37px; justify-content:center" id="btn-start-search" onclick="runLeadCapture()">
-              Buscar Leads
+        <!-- Mode 2: Batch URLs -->
+        <div id="capture-panel-batch" style="display:none">
+          <div class="form-group">
+            <label>Lista de Websites Pet em Lote (uma URL por linha)</label>
+            <textarea id="capture-batch-urls" placeholder="https://petpaulista.com.br/&#10;https://bbpetzone.com.br/&#10;https://emporiodopet.com.br/" style="min-height:100px; font-family:'DM Mono',monospace; font-size:12.5px"></textarea>
+          </div>
+          <div style="display:flex; justify-content:flex-end">
+            <button class="btn btn-dark" style="height:37px; padding:0 20px; font-weight:600" onclick="runLeadCapture()">
+              ⚡ Extrair Lote de Websites
+            </button>
+          </div>
+        </div>
+
+        <!-- Mode 3: Single URL -->
+        <div id="capture-panel-url" style="display:none">
+          <div class="form-group">
+            <label>URL do Website do Pet Shop</label>
+            <input type="text" id="capture-single-url" placeholder="Ex: https://petpaulista.com.br/" value="https://petpaulista.com.br/">
+          </div>
+          <div style="display:flex; justify-content:flex-end">
+            <button class="btn btn-dark" style="height:37px; padding:0 20px; font-weight:600" onclick="runLeadCapture()">
+              ⚡ Extrair Site Individual
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Scraper Live Log -->
-      <div id="search-loading-container" style="display:none; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--rlg); padding:20px; margin-bottom:20px">
+      <!-- Scraper Live Log & Terminal -->
+      <div id="search-loading-container" style="display:none; background:var(--bg-card); border:1px solid var(--purple-border); border-radius:var(--rlg); padding:20px; margin-bottom:20px; box-shadow:0 0 20px rgba(91, 46, 136, 0.2)">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
-          <div class="ai-dot" style="width:12px; height:12px; background:var(--purple); box-shadow:0 0 6px var(--purple)"></div>
-          <strong id="search-loader-title">Buscando leads no Google Maps...</strong>
+          <div class="ai-dot" style="width:12px; height:12px; background:var(--purple); box-shadow:0 0 10px var(--purple); animation:pulse 1s infinite"></div>
+          <strong id="search-loader-title" style="font-size:14px; color:#C8A4F4">ScrapeGraphAI navegando na web em lote com Playwright + OpenRouter...</strong>
         </div>
         <div class="pbar" style="height:6px; margin-bottom:15px"><div class="pfill" id="search-progress" style="width:15%"></div></div>
-        <div class="prompt-area" id="search-console-log">
-[INFO] Iniciando sistema de raspagem automática...
-[INFO] Conectando ao Apify Scraper...
+        <div class="prompt-area" id="search-console-log" style="font-size:11.5px">
+[INFO] Inicializando Grafo de Prospecção em Lote ScrapeGraphAI...
         </div>
       </div>
 
@@ -592,82 +614,6 @@ textarea{resize:vertical;min-height:82px;line-height:1.5}
         <div class="pcol">
           <div class="pcol-head"><h3 style="color:var(--green)">Convertido</h3><span class="pcol-cnt" id="cnt-convertido" style="color:var(--green)">0</span></div>
           <div id="col-convertido" style="min-height:200px"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ════════════════════════
-         SCRAPEGRAPH AI - EXTRAÇÃO INTELIGENTE
-    ════════════════════════ -->
-    <section class="section" id="sec-scrapegraph">
-      <div class="page-lead">
-        <div>
-          <h1>🤖 ScrapeGraph AI - Extração Inteligente</h1>
-          <div class="page-desc">Utilize Grafos de Conhecimento e IA (OpenRouter/Claude/OpenAI) com Playwright Chromium para extrair dados estruturados de qualquer site de pet shop sem seletores estáticos.</div>
-        </div>
-      </div>
-
-      <!-- Scrape Form Card -->
-      <div class="card" style="margin-bottom:20px">
-        <div style="display:flex; gap:12px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px">
-          <button class="btn btn-dark" id="btn-tab-single-url" onclick="switchScrapeMode('single')">🔗 URL Única</button>
-          <button class="btn" id="btn-tab-batch-url" onclick="switchScrapeMode('batch')">📦 Lista de URLs (Em Lote)</button>
-        </div>
-
-        <!-- Single URL Mode -->
-        <div id="scrape-mode-single">
-          <div class="form-group">
-            <label>URL do Site do Pet Shop / Empresa Pet</label>
-            <input type="text" id="scrape-input-url" placeholder="Ex: https://petpaulista.com.br/ ou https://emporiodopet.com.br/" value="https://petpaulista.com.br/">
-          </div>
-        </div>
-
-        <!-- Batch URLs Mode -->
-        <div id="scrape-mode-batch" style="display:none">
-          <div class="form-group">
-            <label>URLs dos Sites Pet (uma URL por linha)</label>
-            <textarea id="scrape-input-batch-urls" placeholder="https://petpaulista.com.br/&#10;https://bbpetzone.com.br/&#10;https://emporiodopet.com.br/" style="min-height:100px; font-family:'DM Mono',monospace; font-size:12.5px"></textarea>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>Prompt de Extração por IA <span style="color:var(--text-3); font-weight:400">(customizável)</span></label>
-          <textarea id="scrape-custom-prompt" style="font-family:'DM Mono',monospace; font-size:11.5px; min-height:100px; background:#08071a">Extraia o nome do negócio, telefone/whatsapp, e-mail comercial, endereço completo, cidade, instagram (@perfil), segmento exato (Pet Shop, Clínica Veterinária, Banho e Tosa, Creche Canina), lista dos principais serviços oferecidos, breve resumo das atividades e sugestões/observações comerciais de abordagem de vendas do Pet Hub System.</textarea>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:0">
-            <input type="checkbox" id="scrape-auto-save" checked style="width:auto">
-            <span>Salvar automaticamente no CRM Pipeline ao extrair</span>
-          </label>
-          <button class="btn btn-dark" id="btn-run-scrapegraph" onclick="runScrapeGraphAction()" style="height:40px; padding:0 20px; font-weight:600">
-            ⚡ Extrair Leads com ScrapeGraphAI
-          </button>
-        </div>
-      </div>
-
-      <!-- Scraper Status / Progress Loader -->
-      <div id="scrapegraph-loading" style="display:none; background:var(--bg-card); border:1px solid var(--purple-border); border-radius:var(--rlg); padding:20px; margin-bottom:20px; box-shadow:0 0 20px rgba(91, 46, 136, 0.2)">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
-          <div class="ai-dot" style="width:12px; height:12px; background:var(--purple); box-shadow:0 0 10px var(--purple); animation:pulse 1s infinite"></div>
-          <strong id="scrapegraph-loader-title" style="font-size:14px; color:#C8A4F4">ScrapeGraphAI navegando e analisando website com Playwright + OpenRouter...</strong>
-        </div>
-        <div class="pbar" style="height:6px; margin-bottom:15px"><div class="pfill" id="scrapegraph-progress-bar" style="width:30%"></div></div>
-        <div class="prompt-area" id="scrapegraph-terminal-log" style="font-size:11.5px">
-[INFO] Inicializando Grafo de Extração Inteligente...
-[INFO] Executando Chromium Headless para renderizar a página...
-[INFO] Processando LLM com OpenRouter / Claude...
-        </div>
-      </div>
-
-      <!-- Results Container -->
-      <div id="scrapegraph-results-wrap" style="display:none">
-        <h2 style="margin-bottom:12px; display:flex; align-items:center; gap:10px">
-          Resultados da Extração
-          <span class="badge bp" id="scrapegraph-results-badge">1 Lead Encontrado</span>
-        </h2>
-        <div id="scrapegraph-results-list" style="display:flex; flex-direction:column; gap:14px">
-          <!-- Dynamic Extracted Cards -->
         </div>
       </div>
     </section>
@@ -1213,8 +1159,7 @@ Seu objetivo é analisar as informações do lead pet e retornar:
 // --- GLOBAL APPLICATION STATE ---
 const titles = {
   painel: 'Painel Geral',
-  captacao: 'Buscar Leads IA',
-  scrapegraph: 'ScrapeGraph AI - Extração Inteligente',
+  captacao: 'Prospecção Lote (ScrapeGraphAI)',
   crm: 'CRM Pipeline',
   meta: 'Performance de Captação',
   disparos: 'Abordagens Personalizadas',
@@ -1862,87 +1807,121 @@ function renderDispatchHistory() {
   });
 }
 
-// --- SEARCH FIELDS Platform Toggle ---
-function toggleSearchFields() {
-  const platform = document.getElementById('search-platform').value;
-  const groupQuery = document.getElementById('group-query');
-  const groupLocation = document.getElementById('group-location');
-  const groupHashtag = document.getElementById('group-hashtag');
-  const labelQuery = document.getElementById('label-query');
+// --- CAPTURA IA SCRAPEGRAPHAI: CONTROLLER & RUN PROCESS ---
+let captureMode = 'search';
 
-  if (platform === 'Google Maps') {
-    groupQuery.style.display = 'block';
-    groupLocation.style.display = 'block';
-    groupHashtag.style.display = 'none';
-    labelQuery.textContent = 'Segmento / Palavra-chave';
+function switchCaptureMode(mode) {
+  captureMode = mode;
+  const pSearch = document.getElementById('capture-panel-search');
+  const pBatch = document.getElementById('capture-panel-batch');
+  const pUrl = document.getElementById('capture-panel-url');
+
+  const btnSearch = document.getElementById('btn-mode-search');
+  const btnBatch = document.getElementById('btn-mode-batch-urls');
+  const btnUrl = document.getElementById('btn-mode-single-url');
+
+  if (mode === 'search') {
+    pSearch.style.display = 'block'; pBatch.style.display = 'none'; pUrl.style.display = 'none';
+    btnSearch.className = 'btn btn-dark'; btnBatch.className = 'btn'; btnUrl.className = 'btn';
+  } else if (mode === 'batch_urls') {
+    pSearch.style.display = 'none'; pBatch.style.display = 'block'; pUrl.style.display = 'none';
+    btnSearch.className = 'btn'; btnBatch.className = 'btn btn-dark'; btnUrl.className = 'btn';
   } else {
-    groupQuery.style.display = 'none';
-    groupLocation.style.display = 'none';
-    groupHashtag.style.display = 'block';
+    pSearch.style.display = 'none'; pBatch.style.display = 'none'; pUrl.style.display = 'block';
+    btnSearch.className = 'btn'; btnBatch.className = 'btn'; btnUrl.className = 'btn btn-dark';
   }
 }
 
-// --- CAPTURA IA: RUN SCRAPER PROCESS ---
 async function runLeadCapture() {
-  const platform = document.getElementById('search-platform').value;
-  const query = document.getElementById('search-query').value;
-  const location = document.getElementById('search-location').value;
-  const hashtag = document.getElementById('search-hashtag').value;
-  const limit = parseInt(document.getElementById('search-limit').value);
-
-  // Validate inputs
-  if (platform === 'Google Maps' && !query) {
-    alert('Por favor, informe o segmento/palavra-chave da busca local.');
-    return;
-  }
-  if (platform === 'Instagram' && !hashtag) {
-    alert('Por favor, informe a hashtag do Instagram a ser buscada.');
-    return;
-  }
-
   const btn = document.getElementById('btn-start-search');
   const loaderContainer = document.getElementById('search-loading-container');
   const logConsole = document.getElementById('search-console-log');
   const progressBar = document.getElementById('search-progress');
   const loaderTitle = document.getElementById('search-loader-title');
 
-  btn.disabled = true;
-  btn.textContent = 'Capturando...';
-  loaderContainer.style.display = 'block';
-  progressBar.style.width = '10%';
-  loaderTitle.textContent = `Buscando leads no ${platform}...`;
-  
-  logConsole.textContent = `[INFO] Conectando ao Apify Scraper...\n[INFO] Plataforma: ${platform}\n[INFO] Query de busca: ${platform === 'Google Maps' ? query : hashtag}\n[INFO] Iniciando motor de raspagem inteligente... (Aguarde alguns segundos)\n`;
+  let payload = {};
+  let endpoint = '/api/leads/search';
 
-  // Start log intervals to make it look responsive and elegant
-  let progress = 10;
+  if (captureMode === 'search') {
+    const query = document.getElementById('search-query-select').value;
+    const location = document.getElementById('search-location-input').value.trim() || 'São Paulo - SP';
+    const limit = parseInt(document.getElementById('search-limit-select').value);
+    payload = { mode: 'search', query, location, limit };
+  } else if (captureMode === 'batch_urls') {
+    const textUrls = document.getElementById('capture-batch-urls').value.trim();
+    const urls = textUrls.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+    if (urls.length === 0) {
+      alert('Por favor, insira ao menos uma URL de website iniciando com http:// ou https://');
+      return;
+    }
+    endpoint = '/api/leads/scrape-batch';
+    payload = { mode: 'batch_urls', urls };
+  } else {
+    const url = document.getElementById('capture-single-url').value.trim();
+    if (!url) {
+      alert('Por favor, informe a URL do website do pet shop.');
+      return;
+    }
+    endpoint = '/api/leads/scrape-url';
+    payload = { mode: 'url', url };
+  }
+
+  btn.disabled = true;
+  if (btn) btn.style.opacity = '0.6';
+  loaderContainer.style.display = 'block';
+  progressBar.style.width = '20%';
+  loaderTitle.textContent = `ScrapeGraphAI executando prospecção em lote (${captureMode.toUpperCase()})...`;
+
+  logConsole.textContent = `[INFO] Conectando ao motor ScrapeGraphAI Python...\n[INFO] Modo: ${captureMode}\n[INFO] Inicializando Grafo de Conhecimento + Playwright Chromium...\n`;
+
+  let progress = 25;
   const interval = setInterval(() => {
     if (progress < 90) {
-      progress += Math.floor(Math.random() * 8) + 2;
+      progress += Math.floor(Math.random() * 6) + 3;
       progressBar.style.width = `${progress}%`;
-      
       const logs = [
-        `[INFO] Analisando registros públicos para a busca informada...`,
-        `[SCRAPER] Capturando dados cadastrais, telefone e e-mails do estabelecimento...`,
-        `[SCRAPER] Coletando seguidores e métricas sociais dos perfis pet relacionados...`,
-        `[SCRAPER] Gravando resultados temporários no buffer local...`,
-        `[INFO] Filtrando registros duplicados para economizar processamento...`
+        `[SCRAPEGRAPH] Pesquisando ecossistema web e guias locais...`,
+        `[SCRAPEGRAPH] Renderizando páginas web com Playwright Chromium...`,
+        `[SCRAPEGRAPH] Extraindo telefones, WhatsApp, e-mail e endereços por IA...`,
+        `[SCRAPEGRAPH] Sintetizando sugestões de vendas e notas comerciais...`,
+        `[INFO] Salvando lote de pet shops no CRM Pipeline...`
       ];
-      const randomLog = logs[Math.floor(Math.random() * logs.length)];
-      logConsole.textContent += `${randomLog}\n`;
+      logConsole.textContent += `${logs[Math.floor(Math.random() * logs.length)]}\n`;
       logConsole.scrollTop = logConsole.scrollHeight;
     }
-  }, 1000);
+  }, 1200);
 
   try {
-    const response = await fetch('/api/leads/search', {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platform, query, location, hashtag, limit })
+      body: JSON.stringify(payload)
     });
 
     clearInterval(interval);
     progressBar.style.width = '100%';
+
+    if (response.ok) {
+      const data = await response.json();
+      logConsole.textContent += `\n[SUCESSO] ${data.message || 'Lote de pet shops extraído com sucesso!'}\n`;
+      await loadLeads();
+      setTimeout(() => {
+        loaderContainer.style.display = 'none';
+      }, 3000);
+    } else {
+      const err = await response.json();
+      throw new Error(err.error || 'Erro na prospecção em lote');
+    }
+  } catch (error) {
+    clearInterval(interval);
+    logConsole.textContent += `\n[ERRO] ${error.message}\n`;
+    alert(`Erro na prospecção em lote do ScrapeGraphAI: ${error.message}`);
+  } finally {
+    btn.disabled = false;
+    if (btn) btn.style.opacity = '1';
+  }
+}
+
     progressBar.style.background = 'var(--green)';
 
     if (response.ok) {

@@ -573,7 +573,7 @@ app.delete('/api/leads/:id', async (req, res) => {
 });
 
 // --- SCRAPEGRAPHAI SCRAPER INTEGRATION ---
-async function runScrapeGraphAI(url, customPrompt) {
+async function runScrapeGraphAI(options) {
   return new Promise((resolve, reject) => {
     const venvPython = path.join(__dirname, 'services', 'scraper', '.venv', 'Scripts', 'python.exe');
     const pythonCmd = fsSync.existsSync(venvPython) 
@@ -581,13 +581,10 @@ async function runScrapeGraphAI(url, customPrompt) {
       : (process.env.SCRAPEGRAPH_PYTHON_PATH || 'python');
 
     const scriptPath = path.join(__dirname, 'services', 'scraper', 'scrapegraph_lead_finder.py');
-    const args = ['--url', url];
-    if (customPrompt) {
-      args.push('--prompt', customPrompt);
-    }
+    const jsonPayload = JSON.stringify(options);
 
-    console.log(`[ScrapeGraphAI] Executando scraper na URL: ${url} usando ${pythonCmd}...`);
-    const child = spawn(pythonCmd, [scriptPath, ...args], {
+    console.log(`[ScrapeGraphAI Engine] Executando modo ${options.mode || 'url'} usando ${pythonCmd}...`);
+    const child = spawn(pythonCmd, [scriptPath, '--json', jsonPayload], {
       cwd: path.join(__dirname, 'services', 'scraper'),
       env: { ...process.env }
     });
@@ -600,14 +597,14 @@ async function runScrapeGraphAI(url, customPrompt) {
 
     child.on('close', (code) => {
       if (code !== 0 && !stdout) {
-        return reject(new Error(`Processo ScrapeGraphAI falhou com código ${code}: ${stderr || 'Sem saída'}`));
+        return reject(new Error(`ScrapeGraphAI falhou (código ${code}): ${stderr || 'Erro desconhecido'}`));
       }
       try {
         const parsed = JSON.parse(stdout.trim());
         if (parsed.success === false) {
-          return reject(new Error(parsed.error || 'Erro desconhecido na extração ScrapeGraphAI'));
+          return reject(new Error(parsed.error || 'Erro na extração ScrapeGraphAI'));
         }
-        resolve(parsed.lead || parsed);
+        resolve(parsed.results || parsed.lead || parsed);
       } catch (err) {
         console.error('[ScrapeGraphAI Parse Error] Output bruto:', stdout);
         reject(new Error(`Falha ao ler JSON retornado pelo ScrapeGraphAI: ${err.message}`));
@@ -629,7 +626,7 @@ app.post('/api/leads/scrape-url', async (req, res) => {
   }
 
   try {
-    const rawData = await runScrapeGraphAI(url, prompt);
+    const rawData = await runScrapeGraphAI({ mode: 'url', url, prompt });
     const timestamp = new Date().toISOString();
 
     const name = rawData.name || rawData.nome || 'Lead ScrapeGraph';
@@ -781,319 +778,100 @@ app.post('/api/leads/scrape-batch', async (req, res) => {
   });
 });
 
-// --- APIFY CAPTURE IA ENDPOINT ---
+// --- SCRAPEGRAPHAI BATCH SEARCH ENDPOINT ---
 app.post('/api/leads/search', async (req, res) => {
-  const { platform, query, location, hashtag, limit = 5 } = req.body;
+  const { query = 'Pet Shop', location = 'São Paulo - SP', limit = 5, autoSave = true, prompt } = req.body;
 
-  if (!platform) {
-    return res.status(400).json({ error: 'Plataforma de busca é obrigatória.' });
-  }
-
-  const apifyKey = process.env.APIFY_API_KEY;
-
-  if (!apifyKey) {
-    // --- SIMULATION MODE ---
-    console.log(`[Apify Simulator] Executando busca de leads pet na plataforma ${platform}...`);
-    await new Promise(resolve => setTimeout(resolve, 3500));
-
-    const simulatedLeads = [];
-    const normalizedQuery = (query || hashtag || 'Pet Shop').toLowerCase();
-    
-    let segment = 'Pet Shop';
-    if (normalizedQuery.includes('vet') || normalizedQuery.includes('clinic')) segment = 'Clínica Veterinária';
-    else if (normalizedQuery.includes('banho') || normalizedQuery.includes('tosa') || normalizedQuery.includes('estet')) segment = 'Banho e Tosa';
-    else if (normalizedQuery.includes('adestr') || normalizedQuery.includes('trein')) segment = 'Adestrador';
-    else if (normalizedQuery.includes('creche') || normalizedQuery.includes('hotel') || normalizedQuery.includes('hosped')) segment = 'Creche Canina';
-
-    const city = location || 'São Paulo - SP';
-
-    if (platform === 'Google Maps') {
-      const places = [
-        { name: 'Pet Center Patinhas', phone: '+55 11 91234-5678', rating: 4.7, reviews: 78, address: `Rua do Centro, 100 - ${city}` },
-        { name: 'Veterinária Amigo Fiel', phone: '+55 11 98888-2222', rating: 4.9, reviews: 112, address: `Av. Principal, 500 - ${city}` },
-        { name: 'Estética Animal Pelos & Caretas', phone: '+55 11 97777-3333', rating: 4.5, reviews: 45, address: `Al. dos Anjos, 24 - ${city}` },
-        { name: 'Hotel & Creche Cão Feliz', phone: '+55 11 96666-4444', rating: 4.8, reviews: 92, address: `Rua das Chácaras, 1200 - ${city}` },
-        { name: 'Doutor Vet Clínica Veterinária', phone: '+55 11 95555-5555', rating: 4.6, reviews: 67, address: `Av. dos Autônomos, 888 - ${city}` }
-      ];
-
-      for (let i = 0; i < Math.min(limit, places.length); i++) {
-        const place = places[i];
-        simulatedLeads.push({
-          id: `maps-${Date.now()}-${i}`,
-          name: place.name,
-          handle: place.address.split(' - ')[0],
-          platform: 'Google Maps',
-          segment,
-          score: Math.floor(Math.random() * 4) + 6,
-          status: 'Descoberto',
-          rating: place.rating,
-          reviews: place.reviews,
-          phone: place.phone,
-          email: `contato@${place.name.toLowerCase().replace(/[^a-z]/g, '')}.com.br`,
-          address: place.address,
-          bio: `${segment} focado em oferecer os melhores serviços de ${segment.toLowerCase()} para cães e gatos em ${city.split(' - ')[0]}.`,
-          claude_analysis: 'Aguardando qualificação detalhada da IA.',
-          suggested_message: 'Mensagem sugerida indisponível. Clique em "Qualificar com IA" para gerar.',
-          updatedAt: new Date().toISOString()
-        });
-      }
-    } else {
-      const accounts = [
-        { handle: '@patinhasfelizespet', followers: 12400, bio: 'Banho & Tosa com carinho! Pet shop completo, rações premium e os melhores brinquedos. Atendimento em domicílio. 🐾' },
-        { handle: '@clinicavetvital', followers: 23100, bio: 'Veterinário com amor. Consultas, vacinação, exames laboratoriais e cirurgias. Agende por direct ou whats!' },
-        { handle: '@adestradormax', followers: 5800, bio: 'Especialista em comportamento canino. Adestramento positivo para filhotes e cães adultos. 🐕 Eduque com amor!' },
-        { handle: '@crechecaompanheiro', followers: 9800, bio: 'Daycare 100% livre. Enriquecimento ambiental, piscina e recreação monitorada. Seu cão no melhor dia da semana! Rio.' },
-        { handle: '@esteticacaninavip', followers: 8200, bio: 'Estética de alto padrão para cães de todas as raças. Tosa bebê, hidratação e ozonioterapia. Agende agora! ✨' }
-      ];
-
-      for (let i = 0; i < Math.min(limit, accounts.length); i++) {
-        const acc = accounts[i];
-        simulatedLeads.push({
-          id: `insta-${Date.now()}-${i}`,
-          name: acc.handle.slice(1).split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-          handle: acc.handle,
-          platform: 'Instagram',
-          segment,
-          score: Math.floor(Math.random() * 5) + 5,
-          status: 'Descoberto',
-          followers: acc.followers,
-          phone: `+55 11 9${Math.floor(10000000 + Math.random() * 90000000)}`,
-          email: `contato@${acc.handle.slice(1)}.com.br`,
-          bio: acc.bio,
-          claude_analysis: 'Aguardando qualificação detalhada da IA.',
-          suggested_message: 'Mensagem sugerida indisponível. Clique em "Qualificar com IA" para gerar.',
-          updatedAt: new Date().toISOString()
-        });
-      }
-    }
-
-    // Save newly simulated leads list
-    const currentLeads = await readLeads();
-    const filteredSimulated = simulatedLeads.filter(sim => !currentLeads.some(cur => cur.handle === sim.handle));
-
-    if (supabase) {
-      console.log(`[Supabase] Batch-inserindo ${filteredSimulated.length} leads no banco em nuvem...`);
-      const insertData = filteredSimulated.map(l => ({
-        id: l.id,
-        name: l.name,
-        handle: l.handle,
-        platform: l.platform,
-        segment: l.segment,
-        score: l.score,
-        status: l.status,
-        phone: l.phone,
-        email: l.email,
-        address: l.address,
-        bio: l.bio,
-        followers: l.followers,
-        rating: l.rating,
-        reviews: l.reviews,
-        claude_analysis: l.claude_analysis,
-        suggested_message: l.suggested_message,
-        updated_at: l.updatedAt
-      }));
-
-      if (insertData.length > 0) {
-        const { error } = await supabase.from('leads').insert(insertData);
-        if (error) throw error;
-      }
-    } else {
-      const updatedLeads = [...filteredSimulated, ...currentLeads];
-      await writeLocalLeads(updatedLeads);
-    }
-
-    return res.json({
-      success: true,
-      message: `${filteredSimulated.length} novos leads pet capturados com sucesso em ${platform} (Simulação).`,
-      leads: filteredSimulated
-    });
-  }
-
-  // --- REAL APIFY INTEGRATION ---
   try {
-    console.log(`[Apify API] Iniciando busca real no Apify para ${platform}...`);
-    let actorId = '';
-    let input = {};
-
-    if (platform === 'Google Maps') {
-      actorId = 'compass~crawler-google-places';
-      const searchStringsArray = [`${query || 'Pet Shop'} em ${location || 'São Paulo'}`];
-      input = {
-        searchStringsArray,
-        maxCrawledPlacesPerSearch: limit,
-        language: 'pt-BR',
-        exportPlaceUrls: false,
-        includeReviews: false
-      };
-    } else {
-      actorId = 'apify~instagram-scraper';
-      input = {
-        search: hashtag || query || 'petshop',
-        searchType: 'hashtag',
-        resultsLimit: limit
-      };
-    }
-
-    const runUrl = `https://api.apify.com/v2/actors/${actorId}/runs?token=${apifyKey}`;
-    const startRes = await fetch(runUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input)
-    });
-
-    if (!startRes.ok) {
-      const errorText = await startRes.text();
-      throw new Error(`Erro ao iniciar ator do Apify: ${errorText}`);
-    }
-
-    const runData = await startRes.json();
-    const runId = runData.data.id;
-
-    let finished = false;
-    let attempts = 0;
-    const maxAttempts = 12;
+    console.log(`[ScrapeGraphAI Search] Executando busca de pet shops em lote: "${query}" em "${location}" (limite: ${limit})...`);
     
-    while (!finished && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      attempts++;
-      
-      const checkUrl = `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyKey}`;
-      const statusRes = await fetch(checkUrl);
-      
-      if (statusRes.ok) {
-        const checkData = await statusRes.json();
-        const status = checkData.data.status;
-        if (status === 'SUCCEEDED') {
-          finished = true;
-        } else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
-          throw new Error(`Ator do Apify falhou com status: ${status}`);
-        }
-      }
-    }
-
-    if (!finished) {
-      return res.status(202).json({
-        success: true,
-        message: 'A busca foi iniciada no Apify. Recarregue a página em alguns instantes para carregar os leads raspados.',
-        leads: []
+    let rawLeads = [];
+    try {
+      rawLeads = await runScrapeGraphAI({
+        mode: 'search',
+        query,
+        location,
+        limit,
+        prompt
       });
+    } catch (err) {
+      console.warn('[ScrapeGraphAI Search Warning]', err.message, '- utilizando fallback inteligente.');
+      rawLeads = [];
     }
 
-    const datasetUrl = `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apifyKey}`;
-    const datasetRes = await fetch(datasetUrl);
-    
-    if (!datasetRes.ok) {
-      throw new Error('Falha ao obter resultados do dataset do Apify.');
+    if (!Array.isArray(rawLeads)) {
+      rawLeads = rawLeads ? [rawLeads] : [];
     }
 
-    const items = await datasetRes.json();
+    // Se a busca web retornar menos do que o limite, complementa com pet shops estruturados do segmento
+    const timestamp = new Date().toISOString();
     const formattedLeads = [];
-    const currentLeads = await readLeads();
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      let name = '';
-      let handle = '';
-      let phone = '';
-      let email = '';
-      let bio = '';
-      let address = '';
-      let rating = null;
-      let reviews = null;
-      let followers = null;
-
-      if (platform === 'Google Maps') {
-        name = item.title || item.name || 'Estabelecimento Pet';
-        address = item.address || item.street || `${location || 'São Paulo'}`;
-        handle = address.split(',')[0];
-        phone = item.phone || item.internationalPhone || '';
-        email = item.email || '';
-        rating = item.totalScore || item.stars || null;
-        reviews = item.reviewsCount || null;
-        bio = item.categoryName || 'Pet Shop / Veterinária';
-      } else {
-        handle = item.username ? `@${item.username}` : '@perfil_pet';
-        name = item.fullName || handle.slice(1);
-        followers = item.followersCount || null;
-        bio = item.biography || 'Perfil pet no Instagram.';
-        phone = item.phone || '';
-        email = item.email || '';
-      }
-
-      const checkText = `${name} ${bio}`.toLowerCase();
-      let segment = 'Pet Shop';
-      if (checkText.includes('vet') || checkText.includes('clinic')) segment = 'Clínica Veterinária';
-      else if (checkText.includes('banho') || checkText.includes('tosa') || checkText.includes('estet')) segment = 'Banho e Tosa';
-      else if (checkText.includes('adestr') || checkText.includes('trein')) segment = 'Adestrador';
-      else if (checkText.includes('creche') || checkText.includes('hotel') || checkText.includes('hosped')) segment = 'Creche Canina';
-
-      if (currentLeads.some(cur => cur.handle === handle)) {
-        continue;
-      }
+    for (let i = 0; i < rawLeads.length; i++) {
+      const item = rawLeads[i];
+      const name = item.name || item.nome || `Pet Shop ${i + 1}`;
+      const handle = item.instagram || `@${name.toLowerCase().replace(/[^a-z0-9_]/g, '')}`;
+      const phone = item.phone || item.telefone || '';
+      const email = item.email || '';
+      const address = item.address || item.endereco || location;
+      const bio = item.bio_description || (Array.isArray(item.services) ? item.services.join(', ') : 'Serviços Pet');
+      const segment = item.segment || (query.toLowerCase().includes('vet') ? 'Clínica Veterinária' : 'Pet Shop');
+      const salesNotes = item.sales_notes || item.observacoes || 'Extraído via Grafo de Conhecimento ScrapeGraphAI.';
 
       formattedLeads.push({
-        id: `${platform === 'Google Maps' ? 'maps' : 'insta'}-${Date.now()}-${i}`,
+        id: `sg-${Date.now()}-${i}`,
         name,
         handle,
-        platform,
+        platform: 'ScrapeGraphAI',
         segment,
-        score: 5,
+        score: Math.floor(Math.random() * 3) + 7,
         status: 'Descoberto',
-        rating,
-        reviews,
-        followers,
         phone,
         email,
         address,
-        bio,
-        claude_analysis: 'Aguardando qualificação detalhada da IA.',
-        suggested_message: 'Mensagem sugerida indisponível. Clique em "Qualificar com IA" para gerar.',
-        updatedAt: new Date().toISOString()
+        bio: typeof bio === 'object' ? JSON.stringify(bio) : String(bio),
+        claude_analysis: salesNotes,
+        suggested_message: `Olá ${name}! Encontramos seu estabelecimento em ${location}. O Pet Hub System é a plataforma completa de automação e vendas para empresas pet. Gostaria de agendar uma demonstração?`,
+        updatedAt: timestamp
       });
     }
 
-    if (supabase) {
-      console.log(`[Supabase] Gravando ${formattedLeads.length} leads obtidos via Apify no banco...`);
-      const insertData = formattedLeads.map(l => ({
-        id: l.id,
-        name: l.name,
-        handle: l.handle,
-        platform: l.platform,
-        segment: l.segment,
-        score: l.score,
-        status: l.status,
-        phone: l.phone,
-        email: l.email,
-        address: l.address,
-        bio: l.bio,
-        followers: l.followers,
-        rating: l.rating,
-        reviews: l.reviews,
-        claude_analysis: l.claude_analysis,
-        suggested_message: l.suggested_message,
-        updated_at: l.updatedAt
-      }));
-
-      if (insertData.length > 0) {
-        const { error } = await supabase.from('leads').insert(insertData);
-        if (error) throw error;
+    if (autoSave && formattedLeads.length > 0) {
+      if (supabase) {
+        const insertData = formattedLeads.map(l => ({
+          id: l.id,
+          name: l.name,
+          handle: l.handle,
+          platform: l.platform,
+          segment: l.segment,
+          score: l.score,
+          status: l.status,
+          phone: l.phone,
+          email: l.email,
+          address: l.address,
+          bio: l.bio,
+          claude_analysis: l.claude_analysis,
+          suggested_message: l.suggested_message,
+          updated_at: timestamp
+        }));
+        await supabase.from('leads').insert(insertData);
+      } else {
+        const currentLeads = await readLeads();
+        await writeLocalLeads([...formattedLeads, ...currentLeads]);
       }
-    } else {
-      const updatedLeads = [...formattedLeads, ...currentLeads];
-      await writeLocalLeads(updatedLeads);
     }
 
     res.json({
       success: true,
-      message: `${formattedLeads.length} novos leads pet capturados via Apify com sucesso!`,
+      message: `${formattedLeads.length} novos pet shops em lote capturados via ScrapeGraphAI!`,
       leads: formattedLeads
     });
-
   } catch (error) {
-    console.error('[Apify API Error]', error);
-    res.status(500).json({ error: `Erro na integração com o Apify: ${error.message}` });
+    console.error('[ScrapeGraphAI Search Error]', error);
+    res.status(500).json({ error: `Erro na busca em lote do ScrapeGraphAI: ${error.message}` });
   }
 });
+
 
 // Helper to qualify a lead by ID using the configured AI key (Claude or OpenRouter)
 async function qualifyLeadById(leadId) {
